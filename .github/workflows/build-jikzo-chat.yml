@@ -50,10 +50,10 @@ jobs:
           source = gradle_file.read_text()
           if "checkReleaseBuilds" not in source:
               if gradle_file.suffix == ".kts":
-                  lint_config = "    lint {\\n        checkReleaseBuilds = false\\n    }\\n"
+                  lint_config = "    lint {\n        checkReleaseBuilds = false\n    }\n"
               else:
-                  lint_config = "    lint {\\n        checkReleaseBuilds false\\n    }\\n"
-              source = source.replace("android {", "android {\\n" + lint_config, 1)
+                  lint_config = "    lint {\n        checkReleaseBuilds false\n    }\n"
+              source = source.replace("android {", "android {\n" + lint_config, 1)
               gradle_file.write_text(source)
           print(f"Configured release lint in {gradle_file}")
           PY
