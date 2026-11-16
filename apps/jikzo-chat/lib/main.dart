@@ -1,253 +1,91 @@
 import 'package:flutter/material.dart';
-
-void main() => runApp(const JikzoChatApp());
-
-const bg = Color(0xFF090D18);
-const panel = Color(0xFF141D30);
-const muted = Color(0xFF929DB3);
-const accent = Color(0xFF8178FF);
-
-class JikzoChatApp extends StatelessWidget {
-  const JikzoChatApp({super.key});
-
-  @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'JIKZO Chat',
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: bg,
-      colorScheme: ColorScheme.fromSeed(seedColor: accent, brightness: Brightness.dark),
-      useMaterial3: true,
-    ),
-    home: const ChatHome(),
-  );
+import 'package:supabase_flutter/supabase_flutter.dart';
+const bg=Color(0xFF090D18), panel=Color(0xFF141D30), muted=Color(0xFF929DB3), accent=Color(0xFF8178FF);
+Future<void> main() async {
+ WidgetsFlutterBinding.ensureInitialized();
+ const url=String.fromEnvironment('SUPABASE_URL'), key=String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
+ if(url.isEmpty||key.isEmpty){runApp(const App(configured:false));return;}
+ await Supabase.initialize(url:url,publishableKey:key); runApp(const App(configured:true));
 }
-
-class ChatItem {
-  final String name, message, time, initial;
-  final int unread;
-  final Color color;
-  const ChatItem(this.name, this.message, this.time, this.initial, this.unread, this.color);
+class App extends StatelessWidget {
+ final bool configured; const App({super.key,required this.configured});
+ @override Widget build(BuildContext c)=>MaterialApp(title:'JIKZO Chat',debugShowCheckedModeBanner:false,
+ theme:ThemeData(brightness:Brightness.dark,scaffoldBackgroundColor:bg,colorScheme:ColorScheme.fromSeed(seedColor:accent,brightness:Brightness.dark),useMaterial3:true),
+ home:configured?const Gate():const Scaffold(body:Center(child:Padding(padding:EdgeInsets.all(24),child:Text('JIKZO CHAT\n\nBuild configuration is missing. Add SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in GitHub Actions secrets, then rebuild.',textAlign:TextAlign.center)))));
 }
-
-const chats = [
-  ChatItem('Amara', 'That sounds perfect! ✨', '09:42', 'A', 2, Color(0xFFDB8AAB)),
-  ChatItem('JIKZO Creators', 'Leo: Just shared the new files', '09:18', 'J', 5, Color(0xFF6F7CF7)),
-  ChatItem('Daniel M.', 'Voice message · 0:18', 'Yesterday', 'D', 0, Color(0xFF3DAF9B)),
-  ChatItem('Family Group', 'Mum: See you this weekend ❤️', 'Yesterday', 'F', 0, Color(0xFFE0A45D)),
-  ChatItem('Nia', 'You: Thanks, speak soon', 'Mon', 'N', 0, Color(0xFF9C82E8)),
-];
-
-class ChatHome extends StatefulWidget {
-  const ChatHome({super.key});
-  @override
-  State<ChatHome> createState() => _ChatHomeState();
+class Gate extends StatelessWidget {
+ const Gate({super.key});
+ @override Widget build(BuildContext c)=>StreamBuilder<AuthState>(stream:Supabase.instance.client.auth.onAuthStateChange,builder:(_,__)=>Supabase.instance.client.auth.currentUser==null?const AuthPage():const PeoplePage());
 }
-
-class _ChatHomeState extends State<ChatHome> {
-  int tab = 0;
-  String query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered = chats.where((c) =>
-      c.name.toLowerCase().contains(query.toLowerCase()) ||
-      c.message.toLowerCase().contains(query.toLowerCase())).toList();
-
-    return Scaffold(
-      body: SafeArea(child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-          child: Row(children: [
-            Container(
-              width: 46, height: 46,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(colors: [accent, Color(0xFF35C8C2)]),
-              ),
-              child: const Icon(Icons.forum_rounded, color: Colors.white, size: 24),
-            ),
-            const SizedBox(width: 12),
-            const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('JIKZO', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: 2)),
-              Text('CHAT', style: TextStyle(fontSize: 9, color: muted, letterSpacing: 4, fontWeight: FontWeight.bold)),
-            ]),
-            const Spacer(),
-            IconButton(onPressed: () => notice(context, 'QR profiles are coming soon.'), icon: const Icon(Icons.qr_code_scanner_rounded)),
-            IconButton(onPressed: () => notice(context, 'More options are coming soon.'), icon: const Icon(Icons.more_horiz_rounded)),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: TextField(
-            onChanged: (v) => setState(() => query = v),
-            decoration: InputDecoration(
-              hintText: 'Search messages or people',
-              hintStyle: const TextStyle(color: muted, fontSize: 14),
-              prefixIcon: const Icon(Icons.search_rounded, color: muted),
-              filled: true, fillColor: panel,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(17), borderSide: BorderSide.none),
-            ),
-          ),
-        ),
-        SizedBox(height: 112, child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-          scrollDirection: Axis.horizontal,
-          children: const [
-            StoryBubble('Your story', '+', Color(0xFF3B465B)),
-            StoryBubble('Amara', 'A', Color(0xFFDB8AAB)),
-            StoryBubble('Daniel', 'D', Color(0xFF3DAF9B)),
-            StoryBubble('Nia', 'N', Color(0xFF9C82E8)),
-            StoryBubble('Leo', 'L', Color(0xFFE0A45D)),
-            StoryBubble('Mila', 'M', Color(0xFF5D9BD8)),
-          ],
-        )),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-          child: Row(children: [
-            const Text('Messages', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
-            const Spacer(),
-            Text('${filtered.length} chats', style: const TextStyle(color: muted, fontSize: 12)),
-          ]),
-        ),
-        Expanded(child: filtered.isEmpty
-          ? const Center(child: Text('No conversations found', style: TextStyle(color: muted)))
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-              itemCount: filtered.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, indent: 74, color: Color(0x1FFFFFFF)),
-              itemBuilder: (context, i) {
-                final c = filtered[i];
-                return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 5),
-                  leading: CircleAvatar(radius: 25, backgroundColor: c.color,
-                    child: Text(c.initial, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 19))),
-                  title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                  subtitle: Text(c.message, maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: muted, fontSize: 12)),
-                  trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text(c.time, style: const TextStyle(color: muted, fontSize: 10)),
-                    const SizedBox(height: 7),
-                    if (c.unread > 0) CircleAvatar(radius: 10, backgroundColor: accent,
-                      child: Text('${c.unread}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-                  ]),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ConversationPage(chat: c))),
-                );
-              },
-            )),
-      ])),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: accent,
-        onPressed: () => notice(context, 'Contact discovery will be connected in the next milestone.'),
-        child: const Icon(Icons.edit_rounded, color: Colors.white),
-      ),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: const Color(0xFF101727),
-        selectedIndex: tab,
-        indicatorColor: accent.withValues(alpha: .22),
-        onDestinationSelected: (v) => setState(() => tab = v),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Chats'),
-          NavigationDestination(icon: Icon(Icons.call_outlined), label: 'Calls'),
-          NavigationDestination(icon: Icon(Icons.people_outline), label: 'Contacts'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), label: 'Settings'),
-        ],
-      ),
-    );
-  }
+class AuthPage extends StatefulWidget {const AuthPage({super.key});@override State<AuthPage> createState()=>_AuthPageState();}
+class _AuthPageState extends State<AuthPage>{
+ final email=TextEditingController(),pass=TextEditingController(),username=TextEditingController(),name=TextEditingController();
+ bool signup=false,busy=false;String? error;
+ @override void dispose(){email.dispose();pass.dispose();username.dispose();name.dispose();super.dispose();}
+ Widget field(TextEditingController x,String hint,{bool secret=false})=>Padding(padding:const EdgeInsets.only(bottom:12),child:TextField(controller:x,obscureText:secret,decoration:InputDecoration(hintText:hint,filled:true,fillColor:panel,border:OutlineInputBorder(borderRadius:BorderRadius.circular(15),borderSide:BorderSide.none))));
+ Future<void> submit()async{
+ setState(()=>{busy=true,error=null});
+ try{final c=Supabase.instance.client;if(signup){
+ final u=username.text.trim().toLowerCase();if(!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(u))throw const AuthException('Username must be 3–24 characters: letters, numbers or _.');
+ final r=await c.auth.signUp(email:email.text.trim(),password:pass.text);
+ if(r.user!=null&&r.session!=null){await c.from('profiles').upsert({'id':r.user!.id,'username':u,'display_name':name.text.trim().isEmpty?u:name.text.trim()});}
+ else if(mounted)setState(()=>error='Check your email to confirm your account, then sign in.');
+ }else{await c.auth.signInWithPassword(email:email.text.trim(),password:pass.text);}
+ }on AuthException catch(e){if(mounted)setState(()=>error=e.message);}on PostgrestException catch(e){if(mounted)setState(()=>error=e.message);}catch(e){if(mounted)setState(()=>error=e.toString());}
+ finally{if(mounted)setState(()=>busy=false);}
+ }
+ @override Widget build(BuildContext c)=>Scaffold(body:SafeArea(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:440),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+ const Icon(Icons.forum_rounded,size:55,color:accent),const SizedBox(height:14),const Text('JIKZO CHAT',textAlign:TextAlign.center,style:TextStyle(fontSize:25,fontWeight:FontWeight.w900,letterSpacing:3)),const SizedBox(height:25),
+ Text(signup?'Create your account':'Welcome back',textAlign:TextAlign.center,style:const TextStyle(color:muted)),const SizedBox(height:18),
+ if(signup)...[field(name,'Display name'),field(username,'Username')],
+ field(email,'Email address'),field(pass,'Password',secret:true),
+ if(error!=null)Padding(padding:const EdgeInsets.only(bottom:12),child:Text(error!,style:const TextStyle(color:Colors.orangeAccent))),
+ FilledButton(style:FilledButton.styleFrom(backgroundColor:accent,padding:const EdgeInsets.all(16)),onPressed:busy?null:submit,child:Text(busy?'Please wait...':signup?'Create account':'Sign in')),
+ TextButton(onPressed:busy?null:()=>setState(()=>{signup=!signup,error=null}),child:Text(signup?'Already registered? Sign in':'Create an account'))
+ ]))))));
 }
-
-class StoryBubble extends StatelessWidget {
-  final String name, initial;
-  final Color color;
-  const StoryBubble(this.name, this.initial, this.color, {super.key});
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(right: 16),
-    child: SizedBox(width: 62, child: Column(children: [
-      Container(padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: accent, width: 1.6)),
-        child: CircleAvatar(radius: 24, backgroundColor: color,
-          child: Text(initial, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)))),
-      const SizedBox(height: 6),
-      Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 11, color: Colors.white70)),
-    ])),
-  );
+class PeoplePage extends StatefulWidget{const PeoplePage({super.key});@override State<PeoplePage> createState()=>_PeoplePageState();}
+class _PeoplePageState extends State<PeoplePage>{
+ final search=TextEditingController();List<Map<String,dynamic>> people=[];bool busy=false;String? error;
+ @override void initState(){super.initState();load();}
+ @override void dispose(){search.dispose();super.dispose();}
+ Future<void> load()async{setState(()=>{busy=true,error=null});try{
+ final me=Supabase.instance.client.auth.currentUser!.id;var q=Supabase.instance.client.from('profiles').select('id,username,display_name').neq('id',me);
+ if(search.text.trim().isNotEmpty){final v=search.text.trim();q=q.or('username.ilike.%'+v+'%,display_name.ilike.%'+v+'%');}
+ final rows=await q.order('username').limit(40);if(mounted)setState(()=>people=List<Map<String,dynamic>>.from(rows));
+ }catch(e){if(mounted)setState(()=>error=e.toString());}finally{if(mounted)setState(()=>busy=false);}}
+ Future<void> openChat(Map<String,dynamic> p)async{try{
+ final id=await Supabase.instance.client.rpc('start_conversation',params:{'other_user':p['id']});if(!mounted)return;
+ final n=(p['display_name'] as String?)?.isNotEmpty==true?p['display_name'].toString():p['username'].toString();
+ Navigator.push(context,MaterialPageRoute(builder:(_)=>ChatPage(id:id.toString(),name:n,handle:p['username'].toString())));
+ }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}}
+ @override Widget build(BuildContext c)=>Scaffold(appBar:AppBar(title:const Text('JIKZO CHAT',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:2)),actions:[IconButton(onPressed:()=>Supabase.instance.client.auth.signOut(),icon:const Icon(Icons.logout))]),
+ body:Column(children:[
+ Padding(padding:const EdgeInsets.all(16),child:TextField(controller:search,onSubmitted:(_)=>load(),decoration:InputDecoration(hintText:'Search people by name or username',prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:load,icon:const Icon(Icons.arrow_forward)),filled:true,fillColor:panel,border:OutlineInputBorder(borderRadius:BorderRadius.circular(16),borderSide:BorderSide.none)))),
+ const Padding(padding:EdgeInsets.fromLTRB(20,0,20,12),child:Align(alignment:Alignment.centerLeft,child:Text('DISCOVER PEOPLE',style:TextStyle(color:muted,letterSpacing:2,fontSize:11)))),
+ if(busy)const Expanded(child:Center(child:CircularProgressIndicator()))else if(error!=null)Expanded(child:Center(child:Text(error!)))else if(people.isEmpty)const Expanded(child:Center(child:Text('No users yet. Ask a friend to create an account.')))else Expanded(child:RefreshIndicator(onRefresh:load,child:ListView.separated(itemCount:people.length,separatorBuilder:(_,__)=>const Divider(indent:70),itemBuilder:(c,i){
+ final p=people[i];final n=(p['display_name'] as String?)?.isNotEmpty==true?p['display_name'].toString():p['username'].toString();
+ return ListTile(leading:CircleAvatar(backgroundColor:accent,child:Text(n[0].toUpperCase())),title:Text(n),subtitle:Text('@'+p['username'].toString(),style:const TextStyle(color:muted)),trailing:const Icon(Icons.chat,color:accent),onTap:()=>openChat(p));
+ })))
+ ]));
 }
-
-class ConversationPage extends StatefulWidget {
-  final ChatItem chat;
-  const ConversationPage({super.key, required this.chat});
-  @override
-  State<ConversationPage> createState() => _ConversationPageState();
+class ChatPage extends StatefulWidget{final String id,name,handle;const ChatPage({super.key,required this.id,required this.name,required this.handle});@override State<ChatPage> createState()=>_ChatPageState();}
+class _ChatPageState extends State<ChatPage>{
+ final input=TextEditingController();bool sending=false;
+ @override void dispose(){input.dispose();super.dispose();}
+ Future<void> send()async{final v=input.text.trim();if(v.isEmpty||sending)return;setState(()=>sending=true);try{
+ await Supabase.instance.client.from('messages').insert({'conversation_id':widget.id,'sender_id':Supabase.instance.client.auth.currentUser!.id,'body':v});input.clear();
+ }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Not sent: '+e.toString())));}finally{if(mounted)setState(()=>sending=false);}}
+ @override Widget build(BuildContext c){final me=Supabase.instance.client.auth.currentUser!.id;return Scaffold(appBar:AppBar(title:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(widget.name),Text('@'+widget.handle,style:const TextStyle(fontSize:11,color:muted))])),
+ body:Column(children:[
+ Expanded(child:StreamBuilder<List<Map<String,dynamic>>>(stream:Supabase.instance.client.from('messages').stream(primaryKey:['id']).eq('conversation_id',widget.id).order('created_at'),builder:(c,s){
+ if(s.hasError)return Center(child:Text('Message stream error: '+s.error.toString()));if(!s.hasData)return const Center(child:CircularProgressIndicator());final rows=s.data!;
+ if(rows.isEmpty)return const Center(child:Text('Say hello and start chatting 👋',style:TextStyle(color:muted)));
+ return ListView.builder(padding:const EdgeInsets.all(16),itemCount:rows.length,itemBuilder:(_,i){final r=rows[i];final mine=r['sender_id']==me;return Align(alignment:mine?Alignment.centerRight:Alignment.centerLeft,child:Container(constraints:const BoxConstraints(maxWidth:300),margin:const EdgeInsets.only(bottom:10),padding:const EdgeInsets.symmetric(horizontal:15,vertical:11),decoration:BoxDecoration(color:mine?const Color(0xFF5149B9):panel,borderRadius:BorderRadius.circular(17)),child:Text(r['body'].toString())));});
+ })),
+ SafeArea(top:false,child:Padding(padding:const EdgeInsets.all(12),child:Row(children:[
+ Expanded(child:TextField(controller:input,minLines:1,maxLines:4,onSubmitted:(_)=>send(),decoration:InputDecoration(hintText:'Write a message...',filled:true,fillColor:panel,border:OutlineInputBorder(borderRadius:BorderRadius.circular(22),borderSide:BorderSide.none)))),
+ const SizedBox(width:8),IconButton.filled(style:IconButton.styleFrom(backgroundColor:accent),onPressed:sending?null:send,icon:const Icon(Icons.send))
+ ])))
+ ]));}
 }
-
-class _ConversationPageState extends State<ConversationPage> {
-  final controller = TextEditingController();
-  final messages = <String>['Welcome to JIKZO Chat 👋', 'This is your conversation preview.'];
-  @override
-  void dispose() { controller.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      backgroundColor: bg,
-      titleSpacing: 0,
-      title: Row(children: [
-        CircleAvatar(backgroundColor: widget.chat.color, child: Text(widget.chat.initial)),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.chat.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-          const Text('JIKZO Chat preview', style: TextStyle(fontSize: 10, color: muted)),
-        ]),
-      ]),
-      actions: [
-        IconButton(onPressed: () => notice(context, 'Voice calls are planned for a later phase.'), icon: const Icon(Icons.call_outlined)),
-        IconButton(onPressed: () => notice(context, 'Video calls are planned for a later phase.'), icon: const Icon(Icons.videocam_outlined)),
-      ],
-    ),
-    body: Column(children: [
-      Expanded(child: ListView.builder(
-        padding: const EdgeInsets.all(18),
-        itemCount: messages.length,
-        itemBuilder: (_, i) => Align(
-          alignment: i.isOdd ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 290),
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-            decoration: BoxDecoration(
-              color: i.isOdd ? const Color(0xFF5149B9) : panel,
-              borderRadius: BorderRadius.circular(17)),
-            child: Text(messages[i]),
-          ),
-        ),
-      )),
-      SafeArea(top: false, child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        child: Row(children: [
-          IconButton(onPressed: () => notice(context, 'Attachments are coming soon.'), icon: const Icon(Icons.add_circle_outline, color: accent)),
-          Expanded(child: TextField(controller: controller, minLines: 1, maxLines: 4,
-            decoration: InputDecoration(hintText: 'Write a message...', filled: true, fillColor: panel,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none)))),
-          const SizedBox(width: 6),
-          IconButton(
-            style: IconButton.styleFrom(backgroundColor: accent, foregroundColor: Colors.white),
-            onPressed: () {
-              final value = controller.text.trim();
-              if (value.isEmpty) return;
-              setState(() => messages.add(value));
-              controller.clear();
-            },
-            icon: const Icon(Icons.arrow_upward_rounded)),
-        ]),
-      )),
-    ]),
-  );
-}
-
-void notice(BuildContext context, String message) =>
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
