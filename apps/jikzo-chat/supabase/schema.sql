@@ -1,5 +1,21 @@
 -- JIKZO Chat MVP database. Run once in Supabase SQL Editor.
 create table if not exists public.profiles(id uuid primary key references auth.users(id) on delete cascade,username text unique not null check(char_length(username) between 3 and 24),display_name text not null default '',created_at timestamptz not null default now());
+create or replace function public.handle_new_jikzo_profile()
+returns trigger language plpgsql security definer set search_path=public
+as $
+declare chosen_username text;
+begin
+ chosen_username := lower(coalesce(new.raw_user_meta_data->>'username', split_part(new.email,'@',1)));
+ insert into public.profiles(id,username,display_name)
+ values(new.id,chosen_username,coalesce(new.raw_user_meta_data->>'display_name',chosen_username))
+ on conflict(id) do update set display_name=excluded.display_name;
+ return new;
+end;
+$;
+drop trigger if exists on_auth_user_created_jikzo on auth.users;
+create trigger on_auth_user_created_jikzo after insert on auth.users
+for each row execute procedure public.handle_new_jikzo_profile();
+
 create table if not exists public.conversations(id uuid primary key default gen_random_uuid(),created_at timestamptz not null default now());
 create table if not exists public.conversation_members(conversation_id uuid not null references public.conversations(id) on delete cascade,user_id uuid not null references auth.users(id) on delete cascade,joined_at timestamptz not null default now(),primary key(conversation_id,user_id));
 create table if not exists public.messages(id uuid primary key default gen_random_uuid(),conversation_id uuid not null references public.conversations(id) on delete cascade,sender_id uuid not null references auth.users(id) on delete cascade,body text not null check(char_length(body) between 1 and 4000),created_at timestamptz not null default now());
