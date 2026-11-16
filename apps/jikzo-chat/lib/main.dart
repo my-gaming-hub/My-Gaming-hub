@@ -27,7 +27,7 @@ class _AuthPageState extends State<AuthPage>{
  setState(() { busy=true; error=null; });
  try{final c=Supabase.instance.client;if(signup){
  final u=username.text.trim().toLowerCase();if(!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(u))throw const AuthException('Username must be 3–24 characters: letters, numbers or _.');
- final r=await c.auth.signUp(email:email.text.trim(),password:pass.text);
+ final r=await c.auth.signUp(email:email.text.trim(),password:pass.text, data:{'username':u,'display_name':name.text.trim().isEmpty?u:name.text.trim()});
  if(r.user!=null&&r.session!=null){await c.from('profiles').upsert({'id':r.user!.id,'username':u,'display_name':name.text.trim().isEmpty?u:name.text.trim()});}
  else if(mounted)setState(() { error='Check your email to confirm your account, then sign in.'; });
  }else{await c.auth.signInWithPassword(email:email.text.trim(),password:pass.text);}
