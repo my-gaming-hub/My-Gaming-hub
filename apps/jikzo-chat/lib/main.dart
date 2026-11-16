@@ -24,14 +24,14 @@ class _AuthPageState extends State<AuthPage>{
  @override void dispose(){email.dispose();pass.dispose();username.dispose();name.dispose();super.dispose();}
  Widget field(TextEditingController x,String hint,{bool secret=false})=>Padding(padding:const EdgeInsets.only(bottom:12),child:TextField(controller:x,obscureText:secret,decoration:InputDecoration(hintText:hint,filled:true,fillColor:panel,border:OutlineInputBorder(borderRadius:BorderRadius.circular(15),borderSide:BorderSide.none))));
  Future<void> submit()async{
- setState(()=>{busy=true,error=null});
+ setState(() { busy=true; error=null; });
  try{final c=Supabase.instance.client;if(signup){
  final u=username.text.trim().toLowerCase();if(!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(u))throw const AuthException('Username must be 3–24 characters: letters, numbers or _.');
  final r=await c.auth.signUp(email:email.text.trim(),password:pass.text);
  if(r.user!=null&&r.session!=null){await c.from('profiles').upsert({'id':r.user!.id,'username':u,'display_name':name.text.trim().isEmpty?u:name.text.trim()});}
- else if(mounted)setState(()=>error='Check your email to confirm your account, then sign in.');
+ else if(mounted)setState(() { error='Check your email to confirm your account, then sign in.'; });
  }else{await c.auth.signInWithPassword(email:email.text.trim(),password:pass.text);}
- }on AuthException catch(e){if(mounted)setState(()=>error=e.message);}on PostgrestException catch(e){if(mounted)setState(()=>error=e.message);}catch(e){if(mounted)setState(()=>error=e.toString());}
+ }on AuthException catch(e){if(mounted)setState(() { error=e.message; });}on PostgrestException catch(e){if(mounted)setState(()=>error=e.message);}catch(e){if(mounted)setState(() { error=e.toString(); });}
  finally{if(mounted)setState(()=>busy=false);}
  }
  @override Widget build(BuildContext c)=>Scaffold(body:SafeArea(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:440),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -41,7 +41,7 @@ class _AuthPageState extends State<AuthPage>{
  field(email,'Email address'),field(pass,'Password',secret:true),
  if(error!=null)Padding(padding:const EdgeInsets.only(bottom:12),child:Text(error!,style:const TextStyle(color:Colors.orangeAccent))),
  FilledButton(style:FilledButton.styleFrom(backgroundColor:accent,padding:const EdgeInsets.all(16)),onPressed:busy?null:submit,child:Text(busy?'Please wait...':signup?'Create account':'Sign in')),
- TextButton(onPressed:busy?null:()=>setState(()=>{signup=!signup,error=null}),child:Text(signup?'Already registered? Sign in':'Create an account'))
+ TextButton(onPressed:busy?null:()=>setState(() { signup=!signup; error=null; }),child:Text(signup?'Already registered? Sign in':'Create an account'))
  ]))))));
 }
 class PeoplePage extends StatefulWidget{const PeoplePage({super.key});@override State<PeoplePage> createState()=>_PeoplePageState();}
@@ -52,7 +52,7 @@ class _PeoplePageState extends State<PeoplePage>{
  Future<void> load()async{setState(()=>{busy=true,error=null});try{
  final me=Supabase.instance.client.auth.currentUser!.id;var q=Supabase.instance.client.from('profiles').select('id,username,display_name').neq('id',me);
  if(search.text.trim().isNotEmpty){final v=search.text.trim();q=q.or('username.ilike.%'+v+'%,display_name.ilike.%'+v+'%');}
- final rows=await q.order('username').limit(40);if(mounted)setState(()=>people=List<Map<String,dynamic>>.from(rows));
+ final rows=await q.order('username').limit(40);if(mounted)setState(() { people=List<Map<String,dynamic>>.from(rows); });
  }catch(e){if(mounted)setState(()=>error=e.toString());}finally{if(mounted)setState(()=>busy=false);}}
  Future<void> openChat(Map<String,dynamic> p)async{try{
  final id=await Supabase.instance.client.rpc('start_conversation',params:{'other_user':p['id']});if(!mounted)return;
