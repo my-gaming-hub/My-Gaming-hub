@@ -86,6 +86,8 @@ class Gate extends StatelessWidget {
     builder: (context, snapshot) {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return const AuthPage();
+      final phoneRequired = user.userMetadata?['nexora_phone_required'] == true;
+      if (phoneRequired && user.phoneConfirmedAt == null) return const PhoneVerificationPage();
       return FutureBuilder<Map<String, dynamic>?>(
         future: Supabase.instance.client.from('jikzo_user_moderation')
             .select('status,reason').eq('user_id', user.id).maybeSingle(),
@@ -146,7 +148,7 @@ class _AuthPageState extends State<AuthPage> {
       if (signup) {
         final u = username.text.trim().toLowerCase();
         if (!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(u)) throw const AuthException('Username must be 3–24 characters: letters, numbers or _.');
-        final r = await db.auth.signUp(email: email.text.trim(), password: pass.text, data: {'username': u, 'display_name': name.text.trim().isEmpty ? u : name.text.trim()});
+        final r = await db.auth.signUp(email: email.text.trim(), password: pass.text, data: {'username': u, 'display_name': name.text.trim().isEmpty ? u : name.text.trim(), 'nexora_phone_required': true});
         if (r.user != null && r.session != null) {
           await db.from('profiles').upsert({'id': r.user!.id, 'username': u, 'display_name': name.text.trim().isEmpty ? u : name.text.trim()});
         } else if (mounted) { setState(() => error = 'Check your email to confirm your account, then sign in.'); }
