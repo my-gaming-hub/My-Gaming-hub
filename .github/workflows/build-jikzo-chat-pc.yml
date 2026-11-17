@@ -27,6 +27,9 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Generate web platform files
+        run: flutter create . --platforms=web
+
       - name: Get dependencies
         run: flutter pub get
 
@@ -63,6 +66,7 @@ jobs:
       - name: Build Flutter web app for desktop package
         working-directory: apps/jikzo-chat
         run: |
+          flutter create . --platforms=web
           flutter pub get
           flutter build web --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           New-Item -ItemType Directory -Force -Path desktop/web-dist | Out-Null
