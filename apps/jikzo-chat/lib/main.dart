@@ -643,7 +643,7 @@ class _ChatPageState extends State<ChatPage> {
       setState(() => uploading = true);
       final userId = Supabase.instance.client.auth.currentUser!.id;
       final safeName = file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final path = '\${widget.id}/\${DateTime.now().millisecondsSinceEpoch}_$safeName';
+      final path = '${widget.id}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
       await Supabase.instance.client.storage.from('jikzo-chat-files').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: contentTypeFor(file.name), upsert: false));
       await Supabase.instance.client.from('jikzo_files').insert({'conversation_id': widget.id, 'uploader_id': userId, 'file_name': file.name, 'file_path': path, 'file_size': bytes.length, 'mime_type': contentTypeFor(file.name)});
       await loadAttachments();
@@ -673,8 +673,8 @@ class _ChatPageState extends State<ChatPage> {
   }
   String fileSizeLabel(dynamic value) {
     final size = (value as num?)?.toInt() ?? 0;
-    if (size >= 1024 * 1024) return '\${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
-    if (size >= 1024) return '\${(size / 1024).toStringAsFixed(0)} KB';
+    if (size >= 1024 * 1024) return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (size >= 1024) return '${(size / 1024).toStringAsFixed(0)} KB';
     return '$size B';
   }
   @override
