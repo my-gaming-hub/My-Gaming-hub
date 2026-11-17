@@ -36,6 +36,34 @@ jobs:
       - name: Generate Android platform files
         run: flutter create . --platforms=android
 
+      - name: Set Android compile SDK to 36
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          candidates = [
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle"),
+          ]
+          gradle_file = next((p for p in candidates if p.exists()), None)
+          if gradle_file is None:
+              raise SystemExit("Could not find generated Android app Gradle file")
+          source = gradle_file.read_text()
+          replacements = [
+              ("compileSdk = flutter.compileSdkVersion", "compileSdk = 36"),
+              ("compileSdk flutter.compileSdkVersion", "compileSdk 36"),
+              ("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36"),
+          ]
+          for old, new in replacements:
+              if old in source:
+                  source = source.replace(old, new, 1)
+                  gradle_file.write_text(source)
+                  print(f"Set compile SDK 36 in {gradle_file}")
+                  break
+          else:
+              if "compileSdk = 36" not in source and "compileSdk 36" not in source and "compileSdkVersion 36" not in source:
+                  raise SystemExit(f"Could not identify compileSdk setting in {gradle_file}")
+          PY
+
       - name: Disable broken release lint analysis
         run: |
           python3 - <<'PY'
