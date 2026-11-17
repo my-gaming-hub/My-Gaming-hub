@@ -54,7 +54,7 @@ create table if not exists public.jikzo_admins (
 alter table public.jikzo_admins enable row level security;
 create or replace function public.is_jikzo_admin()
 returns boolean language sql stable security definer set search_path=public
-as $ select exists(select 1 from public.jikzo_admins where user_id=auth.uid() ); $;
+as $$ select exists(select 1 from public.jikzo_admins where user_id=auth.uid()); $$;
 grant execute on function public.is_jikzo_admin() to authenticated;
 drop policy if exists "jikzo_admins_read_self_or_admin" on public.jikzo_admins;
 create policy "jikzo_admins_read_self_or_admin" on public.jikzo_admins
