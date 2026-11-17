@@ -274,7 +274,7 @@ class _ChannelsPageState extends State<ChannelsPage> {
     setState(() { loading = true; error = null; });
     try {
       final term = search.text.trim();
-      var query = db.from('jikzo_channels').select('id,name,description,created_by,created_at');
+      var query = db.from('jikzo_channels').select('id,name,description,avatar_url,created_by,created_at');
       if (term.isNotEmpty) query = query.ilike('name', '%$term%');
       final rows = await query.order('created_at', ascending: false).limit(100);
       final joined = await db.from('jikzo_channel_members').select('channel_id,role').eq('user_id', db.auth.currentUser!.id);
@@ -343,7 +343,7 @@ class _ChannelsPageState extends State<ChannelsPage> {
           final c = channels[i], role = c['my_role']?.toString(), name = c['name'].toString();
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-            leading: const CircleAvatar(backgroundColor: accent, child: Icon(Icons.campaign, color: Colors.white)),
+            leading: CircleAvatar(backgroundColor: accent, backgroundImage: (c['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(c['avatar_url'].toString()) : null, child: (c['avatar_url'] ?? '').toString().isNotEmpty ? null : const Icon(Icons.campaign, color: Colors.white)),
             title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text((c['description'] ?? 'JIKZO Chat channel').toString(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: muted)),
             trailing: role != null ? const Icon(Icons.chevron_right, color: muted) : TextButton(onPressed: () => joinChannel(c), child: const Text('Join')),
@@ -365,8 +365,70 @@ class ChannelDetailPage extends StatefulWidget {
 class _ChannelDetailPageState extends State<ChannelDetailPage> {
   final db = Supabase.instance.client;
   final input = TextEditingController();
-  bool sending = false;
+  bool sending = false, uploadingPhoto = false, appointingAdmin = false;
   bool get canPost => ['owner', 'admin'].contains(widget.channel['my_role']?.toString());
+  bool get isOwner => widget.channel['my_role']?.toString() == 'owner';
+
+  Future<void> pickAndUploadChannelPhoto() async {
+    try {
+      final picked = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false, withData: true);
+      if (picked == null || picked.files.isEmpty) return;
+      final file = picked.files.single;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) throw Exception('Could not read that image. Choose another photo.');
+      if (bytes.length > 5 * 1024 * 1024) throw Exception('Choose an image smaller than 5 MB.');
+      final ext = (file.extension ?? '').toLowerCase();
+      const mimeTypes = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'};
+      final mime = mimeTypes[ext];
+      if (mime == null) throw Exception('Choose a JPG, PNG or WebP image.');
+      if (mounted) setState(() => uploadingPhoto = true);
+      final channelId = widget.channel['id'].toString();
+      final storage = db.storage.from('jikzo-channel-avatars');
+      final path = '$channelId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      await storage.uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime, upsert: true));
+      final url = storage.getPublicUrl(path);
+      await db.from('jikzo_channels').update({'avatar_url': url}).eq('id', channelId);
+      if (mounted) {
+        setState(() => widget.channel['avatar_url'] = url);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Channel picture updated!')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update channel picture: $e')));
+    } finally {
+      if (mounted) setState(() => uploadingPhoto = false);
+    }
+  }
+
+  Future<void> appointAdmin() async {
+    final username = TextEditingController();
+    final accepted = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('Appoint a channel admin'),
+      content: TextField(
+        controller: username,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'JIKZO username', prefixText: '@'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Make admin')),
+      ],
+    ));
+    final handle = username.text.trim().replaceFirst(RegExp(r'^@+'), '');
+    username.dispose();
+    if (accepted != true || handle.isEmpty) return;
+    setState(() => appointingAdmin = true);
+    try {
+      await db.rpc('jikzo_add_channel_admin', params: {
+        'target_channel': widget.channel['id'],
+        'target_username': handle,
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('@$handle is now a channel admin.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not appoint admin: $e')));
+    } finally {
+      if (mounted) setState(() => appointingAdmin = false);
+    }
+  }
   @override
   void dispose() { input.dispose(); super.dispose(); }
   Future<void> publish() async {
@@ -381,10 +443,33 @@ class _ChannelDetailPageState extends State<ChannelDetailPage> {
   }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(widget.channel['name'].toString()),
-      Text(canPost ? 'Channel administrator' : 'Channel member', style: const TextStyle(fontSize: 11, color: muted)),
-    ])),
+    appBar: AppBar(
+      title: Row(children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: accent,
+          backgroundImage: (widget.channel['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(widget.channel['avatar_url'].toString()) : null,
+          child: (widget.channel['avatar_url'] ?? '').toString().isNotEmpty ? null : const Icon(Icons.campaign, size: 18, color: Colors.white),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(widget.channel['name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text(canPost ? 'Channel administrator' : 'Channel member', style: const TextStyle(fontSize: 11, color: muted)),
+        ])),
+      ]),
+      actions: [
+        if (isOwner) IconButton(
+          tooltip: 'Change channel picture',
+          onPressed: uploadingPhoto ? null : pickAndUploadChannelPhoto,
+          icon: uploadingPhoto ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.photo_camera_outlined),
+        ),
+        if (isOwner) IconButton(
+          tooltip: 'Appoint channel admin',
+          onPressed: appointingAdmin ? null : appointAdmin,
+          icon: appointingAdmin ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.person_add_alt_1),
+        ),
+      ],
+    ),
     body: Column(children: [
       if ((widget.channel['description'] ?? '').toString().isNotEmpty)
         Container(width: double.infinity, color: panel, padding: const EdgeInsets.all(14), child: Text(widget.channel['description'].toString(), style: const TextStyle(color: muted))),
