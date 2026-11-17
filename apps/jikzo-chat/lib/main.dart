@@ -276,7 +276,7 @@ class _ProfilePageState extends State<ProfilePage> {
         ListTile(leading: const Icon(Icons.storage_outlined), title: const Text('Storage and data'), subtitle: const Text('Media download preferences'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage(section: 'Storage and data')))),
       ])),
       const SizedBox(height: 20),
-      if (isAdmin) FilledButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Secure owner dashboard tools are planned for the next stage.'))), icon: const Icon(Icons.admin_panel_settings), label: const Text('Owner dashboard — next stage')),
+      if (isAdmin) FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardPage())), icon: const Icon(Icons.admin_panel_settings), label: const Text('Open owner dashboard')),
       OutlinedButton.icon(onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout), label: const Text('Sign out')),
       const SizedBox(height: 20),
       const Center(child: Text('JIKZO CHAT  •  Built for connection', style: TextStyle(color: muted, fontSize: 11))),
@@ -595,4 +595,203 @@ class _ChatPageState extends State<ChatPage> {
         ]))),
       ]));
   }
+}
+
+
+class AdminDashboardPage extends StatefulWidget {
+  const AdminDashboardPage({super.key});
+  @override
+  State<AdminDashboardPage> createState() => _AdminDashboardPageState();
+}
+
+class _AdminDashboardPageState extends State<AdminDashboardPage> {
+  final db = Supabase.instance.client;
+  final search = TextEditingController();
+  final title = TextEditingController();
+  final message = TextEditingController();
+  bool loading = true, working = false;
+  String? error;
+  Map<String, dynamic> stats = {};
+  List<Map<String, dynamic>> users = [];
+  List<Map<String, dynamic>> announcements = [];
+
+  @override
+  void initState() { super.initState(); loadAll(); }
+  @override
+  void dispose() { search.dispose(); title.dispose(); message.dispose(); super.dispose(); }
+
+  Future<void> loadAll() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final admin = await db.from('jikzo_admins').select('user_id')
+          .eq('user_id', db.auth.currentUser!.id).maybeSingle();
+      if (admin == null) throw Exception('This account is not registered as a JIKZO administrator.');
+      await Future.wait([loadStats(), loadUsers(), loadAnnouncements()]);
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> loadStats() async {
+    final result = await db.rpc('jikzo_admin_dashboard_stats');
+    if (result is List && result.isNotEmpty) {
+      stats = Map<String, dynamic>.from(result.first as Map);
+    }
+  }
+  Future<void> loadUsers() async {
+    final term = search.text.trim();
+    final result = await db.rpc('jikzo_admin_list_users', params: {'search_term': term.isEmpty ? null : term});
+    users = List<Map<String, dynamic>>.from(result as List);
+  }
+  Future<void> loadAnnouncements() async {
+    final result = await db.from('jikzo_admin_announcements')
+        .select('id,title,message,created_at').order('created_at', ascending: false).limit(50);
+    announcements = List<Map<String, dynamic>>.from(result);
+  }
+  Future<void> refreshAll() async {
+    setState(() { loading = true; error = null; });
+    try { await Future.wait([loadStats(), loadUsers(), loadAnnouncements()]); }
+    catch (e) { if (mounted) setState(() => error = e.toString()); }
+    finally { if (mounted) setState(() => loading = false); }
+  }
+
+  Future<void> setUserStatus(Map<String, dynamic> user, String status) async {
+    final reason = TextEditingController(text: status == 'active' ? 'Restored by administrator' : '');
+    final accepted = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+      title: Text(status == 'suspended' ? 'Suspend this JIKZO account?' : 'Restore this JIKZO account?'),
+      content: TextField(controller: reason, maxLines: 3, decoration: const InputDecoration(labelText: 'Reason (optional)')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(status == 'suspended' ? 'Suspend' : 'Restore')),
+      ],
+    ));
+    if (accepted != true) { reason.dispose(); return; }
+    setState(() => working = true);
+    try {
+      await db.rpc('jikzo_admin_set_user_status', params: {
+        'target_user_id': user['user_id'],
+        'new_status': status,
+        'moderation_reason': reason.text.trim(),
+      });
+      await Future.wait([loadStats(), loadUsers()]);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(status == 'suspended' ? 'Account restricted inside JIKZO Chat.' : 'Account restored.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update account: $e')));
+    } finally { reason.dispose(); if (mounted) setState(() => working = false); }
+  }
+
+  Future<void> publishAnnouncement() async {
+    final t = title.text.trim(), m = message.text.trim();
+    if (t.isEmpty || m.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter both a title and a message.')));
+      return;
+    }
+    setState(() => working = true);
+    try {
+      await db.from('jikzo_admin_announcements').insert({
+        'title': t, 'message': m, 'created_by': db.auth.currentUser!.id,
+      });
+      title.clear(); message.clear();
+      await loadAnnouncements();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Announcement published to JIKZO Chat.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not publish announcement: $e')));
+    } finally { if (mounted) setState(() => working = false); }
+  }
+
+  Future<void> deleteAnnouncement(String id) async {
+    try {
+      await db.from('jikzo_admin_announcements').delete().eq('id', id);
+      await loadAnnouncements();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not delete announcement: $e')));
+    }
+  }
+
+  Widget statCard(String label, dynamic value, IconData icon) => Expanded(child: Card(
+    color: panel, child: Padding(padding: const EdgeInsets.all(13), child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: accent), const SizedBox(height: 10),
+        Text('${value ?? 0}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(color: muted, fontSize: 11)),
+      ],
+    )),
+  ));
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('JIKZO Owner Dashboard'), actions: [
+      IconButton(onPressed: loading || working ? null : refreshAll, icon: const Icon(Icons.refresh), tooltip: 'Refresh dashboard'),
+    ]),
+    body: loading ? const Center(child: CircularProgressIndicator()) : error != null
+      ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.error_outline, color: Colors.orangeAccent, size: 38),
+          const SizedBox(height: 12), Text(error!, textAlign: TextAlign.center),
+          const SizedBox(height: 12), FilledButton(onPressed: loadAll, child: const Text('Try again')),
+        ])))
+      : RefreshIndicator(onRefresh: refreshAll, child: ListView(padding: const EdgeInsets.all(14), children: [
+          Card(color: panel, child: const ListTile(
+            leading: CircleAvatar(backgroundColor: accent, child: Icon(Icons.shield, color: Colors.white)),
+            title: Text('Owner access active', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('Administrator actions are protected by Supabase database checks.', style: TextStyle(color: muted)),
+          )),
+          const SizedBox(height: 8),
+          const Text('APP OVERVIEW', style: TextStyle(color: muted, letterSpacing: 1.5)),
+          Row(children: [
+            statCard('Members', stats['total_users'], Icons.people_outline),
+            statCard('Chats', stats['total_conversations'], Icons.forum_outlined),
+          ]),
+          Row(children: [
+            statCard('Messages', stats['total_messages'], Icons.chat_bubble_outline),
+            statCard('Shared files', stats['total_shared_files'], Icons.folder_outlined),
+          ]),
+          Row(children: [
+            statCard('Restricted accounts', stats['suspended_users'], Icons.person_off_outlined),
+            const Spacer(),
+          ]),
+          const SizedBox(height: 18),
+          const Text('MEMBER MANAGEMENT', style: TextStyle(color: muted, letterSpacing: 1.5)),
+          const SizedBox(height: 8),
+          TextField(controller: search, onSubmitted: (_) async { setState(() => loading = true); try { await loadUsers(); } catch (e) { error = e.toString(); } finally { if (mounted) setState(() => loading = false); } },
+            decoration: InputDecoration(hintText: 'Search by username or display name', prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: () async { search.clear(); setState(() => loading = true); try { await loadUsers(); } catch (e) { error = e.toString(); } finally { if (mounted) setState(() => loading = false); } }, icon: const Icon(Icons.clear)), filled: true, fillColor: panel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none))),
+          const SizedBox(height: 8),
+          if (users.isEmpty) const Card(color: panel, child: ListTile(title: Text('No members found'))),
+          ...users.map((u) {
+            final name = (u['display_name'] ?? u['username'] ?? 'Member').toString();
+            final handle = (u['username'] ?? 'unknown').toString();
+            final suspended = u['account_status'] == 'suspended';
+            return Card(color: panel, child: ListTile(
+              leading: CircleAvatar(backgroundColor: suspended ? Colors.redAccent : accent, child: Text(name.isEmpty ? '?' : name[0].toUpperCase())),
+              title: Text(name), subtitle: Text('@$handle • ${suspended ? 'Restricted' : 'Active'}', style: TextStyle(color: suspended ? Colors.orangeAccent : muted)),
+              trailing: PopupMenuButton<String>(
+                enabled: !working,
+                onSelected: (v) => setUserStatus(u, v),
+                itemBuilder: (_) => [
+                  if (!suspended) const PopupMenuItem(value: 'suspended', child: Text('Restrict in JIKZO Chat')),
+                  if (suspended) const PopupMenuItem(value: 'active', child: Text('Restore account')),
+                ],
+              ),
+            ));
+          }),
+          const SizedBox(height: 18),
+          const Text('GLOBAL ANNOUNCEMENTS', style: TextStyle(color: muted, letterSpacing: 1.5)),
+          const SizedBox(height: 8),
+          Card(color: panel, child: Padding(padding: const EdgeInsets.all(14), child: Column(children: [
+            TextField(controller: title, maxLength: 120, decoration: const InputDecoration(labelText: 'Announcement title')),
+            const SizedBox(height: 8),
+            TextField(controller: message, maxLines: 4, maxLength: 2000, decoration: const InputDecoration(labelText: 'Message for members', alignLabelWithHint: true)),
+            const SizedBox(height: 8),
+            SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: working ? null : publishAnnouncement, icon: const Icon(Icons.campaign), label: const Text('Publish announcement'))),
+          ]))),
+          if (announcements.isEmpty) const Card(color: panel, child: ListTile(title: Text('No announcements published yet'))),
+          ...announcements.map((a) => Card(color: panel, child: ListTile(
+            title: Text(a['title'].toString()),
+            subtitle: Text(a['message'].toString(), maxLines: 3, overflow: TextOverflow.ellipsis),
+            trailing: IconButton(onPressed: working ? null : () => deleteAnnouncement(a['id'].toString()), icon: const Icon(Icons.delete_outline, color: Colors.redAccent)),
+          ))),
+          const SizedBox(height: 20),
+          const Text('Note: account restriction blocks access only when the app checks this status at sign-in. It does not disable the underlying Supabase Auth account.', style: TextStyle(color: muted, fontSize: 12)),
+        ])),
+  );
 }
