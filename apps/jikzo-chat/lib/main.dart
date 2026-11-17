@@ -1422,6 +1422,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           TextField(
             controller: phone,
             keyboardType: TextInputType.phone,
+            textInputAction: TextInputAction.done,
             decoration: const InputDecoration(
               hintText: 'Phone number, e.g. +447700900123',
               prefixIcon: Icon(Icons.phone_outlined),
@@ -1432,6 +1433,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             TextField(
               controller: code,
               keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
               maxLength: 6,
               decoration: const InputDecoration(
                 hintText: 'Six-digit SMS code',
