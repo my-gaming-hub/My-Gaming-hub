@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 const bg = Color(0xFF090D18), panel = Color(0xFF141D30), muted = Color(0xFF929DB3), accent = Color(0xFF8178FF);
 
@@ -290,9 +292,55 @@ class ChatPage extends StatefulWidget {
 }
 class _ChatPageState extends State<ChatPage> {
   final input = TextEditingController();
-  bool sending = false;
+  bool sending = false, uploading = false, loadingFiles = true;
+  List<Map<String, dynamic>> attachments = [];
+  @override
+  void initState() { super.initState(); loadAttachments(); }
   @override
   void dispose() { input.dispose(); super.dispose(); }
+
+  Future<void> loadAttachments() async {
+    try {
+      final rows = await Supabase.instance.client.from('jikzo_files').select('id,file_name,file_path,file_size,mime_type,created_at').eq('conversation_id', widget.id).order('created_at', ascending: false);
+      if (mounted) setState(() => attachments = List<Map<String, dynamic>>.from(rows));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not load shared files: $e')));
+    } finally { if (mounted) setState(() => loadingFiles = false); }
+  }
+  String contentTypeFor(String name) {
+    final ext = name.split('.').last.toLowerCase();
+    const types = {'jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','gif':'image/gif','webp':'image/webp','mp4':'video/mp4','mov':'video/quicktime','pdf':'application/pdf','txt':'text/plain','doc':'application/msword','docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document','xls':'application/vnd.ms-excel','xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','ppt':'application/vnd.ms-powerpoint','pptx':'application/vnd.openxmlformats-officedocument.presentationml.presentation','mp3':'audio/mpeg','m4a':'audio/mp4','zip':'application/zip'};
+    return types[ext] ?? 'application/octet-stream';
+  }
+  Future<void> pickAndUpload() async {
+    if (uploading) return;
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.any, withData: true, allowMultiple: false);
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single, bytes = result.files.single.bytes;
+      if (bytes == null) throw Exception('Could not read this file. Please choose it again.');
+      if (bytes.length > 50 * 1024 * 1024) throw Exception('Please choose a file smaller than 50 MB.');
+      setState(() => uploading = true);
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final safeName = file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final path = '\${widget.id}/\${DateTime.now().millisecondsSinceEpoch}_$safeName';
+      await Supabase.instance.client.storage.from('jikzo-chat-files').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: contentTypeFor(file.name), upsert: false));
+      await Supabase.instance.client.from('jikzo_files').insert({'conversation_id': widget.id, 'uploader_id': userId, 'file_name': file.name, 'file_path': path, 'file_size': bytes.length, 'mime_type': contentTypeFor(file.name)});
+      await loadAttachments();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File shared successfully.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+    } finally { if (mounted) setState(() => uploading = false); }
+  }
+  Future<void> downloadAttachment(Map<String, dynamic> file) async {
+    try {
+      final url = await Supabase.instance.client.storage.from('jikzo-chat-files').createSignedUrl(file['file_path'].toString(), 60);
+      final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (!opened && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the download link.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+    }
+  }
   Future<void> send() async {
     final value = input.text.trim();
     if (value.isEmpty || sending) return;
@@ -302,6 +350,12 @@ class _ChatPageState extends State<ChatPage> {
       input.clear();
     } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Not sent: ' + e.toString()))); }
     finally { if (mounted) setState(() => sending = false); }
+  }
+  String fileSizeLabel(dynamic value) {
+    final size = (value as num?)?.toInt() ?? 0;
+    if (size >= 1024 * 1024) return '\${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (size >= 1024) return '\${(size / 1024).toStringAsFixed(0)} KB';
+    return '$size B';
   }
   @override
   Widget build(BuildContext context) {
@@ -318,7 +372,20 @@ class _ChatPageState extends State<ChatPage> {
             return Align(alignment: mine ? Alignment.centerRight : Alignment.centerLeft, child: Container(constraints: const BoxConstraints(maxWidth: 300), margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11), decoration: BoxDecoration(color: mine ? const Color(0xFF5149B9) : panel, borderRadius: BorderRadius.circular(17)), child: Text(row['body'].toString())));
           });
         })),
+        if (loadingFiles || attachments.isNotEmpty)
+          SizedBox(height: 76, child: loadingFiles ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))) : ListView.separated(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), itemCount: attachments.length, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (_, i) {
+            final file = attachments[i];
+            return InkWell(onTap: () => downloadAttachment(file), borderRadius: BorderRadius.circular(12), child: Container(width: 210, padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(12)), child: Row(children: [
+              const Icon(Icons.insert_drive_file_outlined, color: accent, size: 25), const SizedBox(width: 8),
+              Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(file['file_name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                Text(fileSizeLabel(file['file_size']), style: const TextStyle(color: muted, fontSize: 10)),
+              ])),
+              const Icon(Icons.download_rounded, size: 18, color: muted),
+            ])));
+          })),
         SafeArea(top: false, child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+          IconButton(onPressed: uploading ? null : pickAndUpload, tooltip: 'Share a file', icon: uploading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.attach_file, color: accent)),
           Expanded(child: TextField(controller: input, minLines: 1, maxLines: 4, onSubmitted: (_) => send(), decoration: InputDecoration(hintText: 'Write a message...', filled: true, fillColor: panel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none)))),
           const SizedBox(width: 8),
           IconButton.filled(style: IconButton.styleFrom(backgroundColor: accent), onPressed: sending ? null : send, icon: const Icon(Icons.send)),
