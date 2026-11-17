@@ -130,7 +130,7 @@ class _HomeShellState extends State<HomeShell> {
   void openChat(String id, String name, String handle) => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: id, name: name, handle: handle)));
   @override
   Widget build(BuildContext context) {
-    final pages = [InboxPage(onOpenChat: openChat), PeoplePage(onOpenChat: openChat), const UpdatesPage(), const ProfilePage()];
+    final pages = [InboxPage(onOpenChat: openChat), PeoplePage(onOpenChat: openChat), const ChannelsPage(), const UpdatesPage(), const ProfilePage()];
     return Scaffold(
       body: IndexedStack(index: selected, children: pages),
       bottomNavigationBar: NavigationBar(
@@ -139,6 +139,7 @@ class _HomeShellState extends State<HomeShell> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Chats'),
           NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'People'),
+          NavigationDestination(icon: Icon(Icons.cell_tower_outlined), selectedIcon: Icon(Icons.cell_tower), label: 'Channels'),
           NavigationDestination(icon: Icon(Icons.campaign_outlined), selectedIcon: Icon(Icons.campaign), label: 'Updates'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
         ],
@@ -249,6 +250,166 @@ class _PeoplePageState extends State<PeoplePage> {
         final p = people[i], display = (p['display_name'] as String?)?.isNotEmpty == true ? p['display_name'].toString() : p['username'].toString();
         return ListTile(leading: CircleAvatar(backgroundColor: accent, backgroundImage: (p['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(p['avatar_url'].toString()) : null, child: (p['avatar_url'] ?? '').toString().isNotEmpty ? null : Text(display.isEmpty ? 'J' : display[0].toUpperCase())), title: Text(display), subtitle: Text('@' + p['username'].toString(), style: const TextStyle(color: muted)), trailing: const Icon(Icons.chat_outlined, color: accent), onTap: () => openChat(p));
       }))),
+    ]),
+  );
+}
+
+
+class ChannelsPage extends StatefulWidget {
+  const ChannelsPage({super.key});
+  @override
+  State<ChannelsPage> createState() => _ChannelsPageState();
+}
+class _ChannelsPageState extends State<ChannelsPage> {
+  final db = Supabase.instance.client;
+  final search = TextEditingController();
+  List<Map<String, dynamic>> channels = [];
+  bool loading = true, creating = false;
+  String? error;
+  @override
+  void initState() { super.initState(); loadChannels(); }
+  @override
+  void dispose() { search.dispose(); super.dispose(); }
+  Future<void> loadChannels() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final term = search.text.trim();
+      var query = db.from('jikzo_channels').select('id,name,description,created_by,created_at');
+      if (term.isNotEmpty) query = query.ilike('name', '%$term%');
+      final rows = await query.order('created_at', ascending: false).limit(100);
+      final joined = await db.from('jikzo_channel_members').select('channel_id,role').eq('user_id', db.auth.currentUser!.id);
+      final roles = <String, String>{for (final row in joined) row['channel_id'].toString(): row['role'].toString()};
+      if (mounted) setState(() => channels = List<Map<String, dynamic>>.from(rows).map((c) => {...c, 'my_role': roles[c['id'].toString()]}).toList());
+    } catch (e) { if (mounted) setState(() => error = e.toString()); }
+    finally { if (mounted) setState(() => loading = false); }
+  }
+  Future<void> createChannel() async {
+    final name = TextEditingController(), description = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Create a channel'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: name, maxLength: 60, decoration: const InputDecoration(labelText: 'Channel name')),
+        TextField(controller: description, maxLength: 300, maxLines: 3, decoration: const InputDecoration(labelText: 'Description')),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
+      ],
+    ));
+    if (ok != true) { name.dispose(); description.dispose(); return; }
+    final n = name.text.trim(), desc = description.text.trim();
+    name.dispose(); description.dispose();
+    if (n.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a channel name.'))); return; }
+    setState(() => creating = true);
+    try {
+      final id = await db.rpc('jikzo_create_channel', params: {'channel_name': n, 'channel_description': desc});
+      await loadChannels();
+      if (!mounted) return;
+      final channel = channels.firstWhere((c) => c['id'].toString() == id.toString(), orElse: () => {'id': id, 'name': n, 'description': desc, 'my_role': 'owner'});
+      openChannel(channel);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Channel created!')));
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not create channel: $e'))); }
+    finally { if (mounted) setState(() => creating = false); }
+  }
+  Future<void> joinChannel(Map<String, dynamic> channel) async {
+    try { await db.rpc('jikzo_join_channel', params: {'target_channel': channel['id']}); await loadChannels(); }
+    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not join channel: $e'))); }
+  }
+  void openChannel(Map<String, dynamic> channel) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => ChannelDetailPage(channel: channel))).then((_) => loadChannels());
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Channels'), actions: [
+      IconButton(onPressed: loading ? null : loadChannels, icon: const Icon(Icons.refresh)),
+      IconButton(onPressed: creating ? null : createChannel, tooltip: 'Create channel', icon: const Icon(Icons.add_circle_outline)),
+    ]),
+    body: Column(children: [
+      Padding(padding: const EdgeInsets.fromLTRB(16, 8, 16, 12), child: TextField(
+        controller: search, onSubmitted: (_) => loadChannels(),
+        decoration: InputDecoration(hintText: 'Search channels', prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: loadChannels, icon: const Icon(Icons.arrow_forward)), filled: true, fillColor: panel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none)),
+      )),
+      if (creating) const LinearProgressIndicator(minHeight: 2),
+      if (loading) const Expanded(child: Center(child: CircularProgressIndicator()))
+      else if (error != null) Expanded(child: Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Could not load channels:\n$error', textAlign: TextAlign.center))))
+      else if (channels.isEmpty) const Expanded(child: Center(child: Padding(padding: EdgeInsets.all(28), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.cell_tower, size: 56, color: accent), SizedBox(height: 12),
+        Text('No channels found', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        SizedBox(height: 6), Text('Create a channel or search for one to join.', textAlign: TextAlign.center, style: TextStyle(color: muted)),
+      ]))))
+      else Expanded(child: RefreshIndicator(onRefresh: loadChannels, child: ListView.separated(
+        itemCount: channels.length, separatorBuilder: (_, __) => const Divider(indent: 76, height: 1),
+        itemBuilder: (context, i) {
+          final c = channels[i], role = c['my_role']?.toString(), name = c['name'].toString();
+          return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+            leading: const CircleAvatar(backgroundColor: accent, child: Icon(Icons.campaign, color: Colors.white)),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text((c['description'] ?? 'JIKZO Chat channel').toString(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: muted)),
+            trailing: role != null ? const Icon(Icons.chevron_right, color: muted) : TextButton(onPressed: () => joinChannel(c), child: const Text('Join')),
+            onTap: role != null ? () => openChannel(c) : null,
+          );
+        },
+      ))),
+    ]),
+    floatingActionButton: FloatingActionButton.extended(onPressed: creating ? null : createChannel, icon: const Icon(Icons.add), label: const Text('Create channel')),
+  );
+}
+
+class ChannelDetailPage extends StatefulWidget {
+  final Map<String, dynamic> channel;
+  const ChannelDetailPage({super.key, required this.channel});
+  @override
+  State<ChannelDetailPage> createState() => _ChannelDetailPageState();
+}
+class _ChannelDetailPageState extends State<ChannelDetailPage> {
+  final db = Supabase.instance.client;
+  final input = TextEditingController();
+  bool sending = false;
+  bool get canPost => ['owner', 'admin'].contains(widget.channel['my_role']?.toString());
+  @override
+  void dispose() { input.dispose(); super.dispose(); }
+  Future<void> publish() async {
+    final body = input.text.trim();
+    if (body.isEmpty || sending || !canPost) return;
+    setState(() => sending = true);
+    try {
+      await db.from('jikzo_channel_posts').insert({'channel_id': widget.channel['id'], 'sender_id': db.auth.currentUser!.id, 'body': body});
+      input.clear();
+    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Post failed: $e'))); }
+    finally { if (mounted) setState(() => sending = false); }
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(widget.channel['name'].toString()),
+      Text(canPost ? 'Channel administrator' : 'Channel member', style: const TextStyle(fontSize: 11, color: muted)),
+    ])),
+    body: Column(children: [
+      if ((widget.channel['description'] ?? '').toString().isNotEmpty)
+        Container(width: double.infinity, color: panel, padding: const EdgeInsets.all(14), child: Text(widget.channel['description'].toString(), style: const TextStyle(color: muted))),
+      Expanded(child: StreamBuilder<List<Map<String, dynamic>>>(
+        stream: db.from('jikzo_channel_posts').stream(primaryKey: ['id']).eq('channel_id', widget.channel['id'].toString()).order('created_at'),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Could not load channel posts:\n' + snapshot.error.toString())));
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final posts = snapshot.data!;
+          if (posts.isEmpty) return const Center(child: Text('No posts yet. Be the first to publish!', style: TextStyle(color: muted)));
+          return ListView.builder(padding: const EdgeInsets.all(14), itemCount: posts.length, itemBuilder: (_, i) {
+            final post = posts[i], date = DateTime.tryParse(post['created_at']?.toString() ?? '')?.toLocal();
+            final stamp = date == null ? '' : date.day.toString() + '/' + date.month.toString() + '/' + date.year.toString() + ' • ' + date.hour.toString().padLeft(2, '0') + ':' + date.minute.toString().padLeft(2, '0');
+            return Card(color: panel, child: Padding(padding: const EdgeInsets.all(15), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(post['body'].toString(), style: const TextStyle(fontSize: 15, height: 1.35)),
+              if (stamp.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Text(stamp, style: const TextStyle(color: muted, fontSize: 10))),
+            ])));
+          });
+        },
+      )),
+      if (canPost) SafeArea(top: false, child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+        Expanded(child: TextField(controller: input, minLines: 1, maxLines: 5, onSubmitted: (_) => publish(), decoration: InputDecoration(hintText: 'Write a channel post...', filled: true, fillColor: panel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none)))),
+        const SizedBox(width: 8),
+        IconButton.filled(onPressed: sending ? null : publish, style: IconButton.styleFrom(backgroundColor: accent), icon: const Icon(Icons.send)),
+      ]))),
     ]),
   );
 }
