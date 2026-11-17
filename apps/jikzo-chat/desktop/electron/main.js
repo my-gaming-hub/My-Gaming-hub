@@ -8,7 +8,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#090D18',
-    title: 'JIKZO Chat',
+    title: 'Nexora',
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
