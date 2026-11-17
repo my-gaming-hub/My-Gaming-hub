@@ -44,3 +44,30 @@ begin
 end; $$;
 grant execute on function public.start_conversation(uuid) to authenticated;
 do $$ begin if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='messages') then alter publication supabase_realtime add table public.messages;end if;end $$;
+
+-- JIKZO Chat owner/admin bootstrap.
+-- The owner is resolved by email on the server; no client can grant admin rights.
+create table if not exists public.jikzo_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  granted_at timestamptz not null default now()
+);
+alter table public.jikzo_admins enable row level security;
+drop policy if exists "jikzo_admins_read_self_or_admin" on public.jikzo_admins;
+create policy "jikzo_admins_read_self_or_admin" on public.jikzo_admins
+  for select to authenticated
+  using (user_id = auth.uid() or public.is_jikzo_admin());
+create or replace function public.is_jikzo_admin()
+returns boolean language sql stable security definer set search_path=public
+as $$ select exists(select 1 from public.jikzo_admins where user_id=auth.uid()); $$;
+grant execute on function public.is_jikzo_admin() to authenticated;
+do $$
+declare owner_id uuid;
+begin
+  select id into owner_id from auth.users where lower(email)=lower('jikzoboyrsa0@gmail.com') limit 1;
+  if owner_id is null then
+    raise exception 'JIKZO owner account not found. Sign in with jikzoboyrsa0@gmail.com first, then rerun this SQL.';
+  end if;
+  insert into public.jikzo_admins(user_id) values(owner_id)
+  on conflict(user_id) do nothing;
+end;
+$$;
