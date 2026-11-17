@@ -19,9 +19,9 @@ class App extends StatelessWidget {
   const App({super.key, required this.configured});
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'JIKZO Chat', debugShowCheckedModeBanner: false,
+    title: 'Nexora', debugShowCheckedModeBanner: false,
     theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: bg, colorScheme: ColorScheme.fromSeed(seedColor: accent, brightness: Brightness.dark), useMaterial3: true),
-    home: configured ? const Gate() : const Scaffold(body: Center(child: Padding(padding: EdgeInsets.all(24), child: Text('JIKZO CHAT\n\nBuild configuration is missing. Check GitHub Actions secrets.', textAlign: TextAlign.center)))),
+    home: configured ? const Gate() : const Scaffold(body: Center(child: Padding(padding: EdgeInsets.all(24), child: Text('NEXORA\n\nBuild configuration is missing. Check GitHub Actions secrets.', textAlign: TextAlign.center)))),
   );
 }
 
@@ -54,7 +54,7 @@ class Gate extends StatelessWidget {
                 const SizedBox(height: 16),
                 const Text('Account restricted', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text('This account has been temporarily restricted by JIKZO Chat administration.', textAlign: TextAlign.center),
+                const Text('This account has been temporarily restricted by Nexora administration.', textAlign: TextAlign.center),
                 if ((status.data?['reason'] ?? '').toString().isNotEmpty) Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: Text('Reason: ${status.data!['reason']}', textAlign: TextAlign.center, style: const TextStyle(color: muted)),
@@ -109,7 +109,7 @@ class _AuthPageState extends State<AuthPage> {
   Widget build(BuildContext context) => Scaffold(body: SafeArea(child: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: ConstrainedBox(
     constraints: const BoxConstraints(maxWidth: 440), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const Icon(Icons.forum_rounded, size: 55, color: accent), const SizedBox(height: 14),
-      const Text('JIKZO CHAT', textAlign: TextAlign.center, style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, letterSpacing: 3)),
+      const Text('NEXORA', textAlign: TextAlign.center, style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, letterSpacing: 3)),
       const SizedBox(height: 25), Text(signup ? 'Create your account' : 'Welcome back', textAlign: TextAlign.center, style: const TextStyle(color: muted)), const SizedBox(height: 18),
       if (signup) ...[field(name, 'Display name'), field(username, 'Username')],
       field(email, 'Email address'), field(pass, 'Password', secret: true),
@@ -184,7 +184,7 @@ class _InboxPageState extends State<InboxPage> {
   }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('JIKZO CHAT', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)), actions: [IconButton(onPressed: load, tooltip: 'Refresh chats', icon: const Icon(Icons.refresh))]),
+    appBar: AppBar(title: const Text('NEXORA', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)), actions: [IconButton(onPressed: load, tooltip: 'Refresh chats', icon: const Icon(Icons.refresh))]),
     body: loading ? const Center(child: CircularProgressIndicator()) : error != null ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Could not load chats:\n' + error!))) : chats.isEmpty
       ? Center(child: Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisSize: MainAxisSize.min, children: const [
           Icon(Icons.forum_outlined, size: 58, color: accent), SizedBox(height: 14),
@@ -245,7 +245,7 @@ class _PeoplePageState extends State<PeoplePage> {
       Padding(padding: const EdgeInsets.all(16), child: TextField(controller: search, onSubmitted: (_) => load(), decoration: InputDecoration(hintText: 'Search username (e.g. @alex)', prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: load, icon: const Icon(Icons.arrow_forward)), filled: true, fillColor: panel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)))),
       if (busy) const Expanded(child: Center(child: CircularProgressIndicator()))
       else if (error != null) Expanded(child: Center(child: Text(error!)))
-      else if (people.isEmpty) const Expanded(child: Center(child: Text('No users found. Invite a friend to join JIKZO Chat.')))
+      else if (people.isEmpty) const Expanded(child: Center(child: Text('No users found. Invite a friend to join Nexora.')))
       else Expanded(child: RefreshIndicator(onRefresh: load, child: ListView.separated(itemCount: people.length, separatorBuilder: (_, __) => const Divider(indent: 72, height: 1), itemBuilder: (context, i) {
         final p = people[i], display = (p['display_name'] as String?)?.isNotEmpty == true ? p['display_name'].toString() : p['username'].toString();
         return ListTile(leading: CircleAvatar(backgroundColor: accent, backgroundImage: (p['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(p['avatar_url'].toString()) : null, child: (p['avatar_url'] ?? '').toString().isNotEmpty ? null : Text(display.isEmpty ? 'J' : display[0].toUpperCase())), title: Text(display), subtitle: Text('@' + p['username'].toString(), style: const TextStyle(color: muted)), trailing: const Icon(Icons.chat_outlined, color: accent), onTap: () => openChat(p));
@@ -345,7 +345,7 @@ class _ChannelsPageState extends State<ChannelsPage> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
             leading: CircleAvatar(backgroundColor: accent, backgroundImage: (c['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(c['avatar_url'].toString()) : null, child: (c['avatar_url'] ?? '').toString().isNotEmpty ? null : const Icon(Icons.campaign, color: Colors.white)),
             title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: Text((c['description'] ?? 'JIKZO Chat channel').toString(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: muted)),
+            subtitle: Text((c['description'] ?? 'Nexora channel').toString(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: muted)),
             trailing: role != null ? const Icon(Icons.chevron_right, color: muted) : TextButton(onPressed: () => joinChannel(c), child: const Text('Join')),
             onTap: role != null ? () => openChannel(c) : null,
           );
@@ -528,7 +528,7 @@ class _UpdatesPageState extends State<UpdatesPage> {
           const Card(color: panel, child: ListTile(
             leading: Icon(Icons.campaign_outlined, color: accent, size: 30),
             title: Text('JIKZO announcements', style: TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('Official updates from the JIKZO Chat owner.', style: TextStyle(color: muted)),
+            subtitle: Text('Official updates from the Nexora owner.', style: TextStyle(color: muted)),
           )),
           if (announcements.isEmpty) const Padding(
             padding: EdgeInsets.all(30),
@@ -625,7 +625,7 @@ class _ProfilePageState extends State<ProfilePage> {
         ListTile(leading: const Icon(Icons.email_outlined), title: const Text('Email'), subtitle: Text(user.email ?? 'Not available')),
         const Divider(height: 1),
         ListTile(leading: const Icon(Icons.verified_user_outlined), title: const Text('Account role'),
-          subtitle: Text(checking ? 'Checking account permissions...' : isAdmin ? 'JIKZO Chat Owner / Administrator' : adminError != null ? 'Admin setup pending — owner database setup is required' : 'Member'),
+          subtitle: Text(checking ? 'Checking account permissions...' : isAdmin ? 'Nexora Owner / Administrator' : adminError != null ? 'Admin setup pending — owner database setup is required' : 'Member'),
           trailing: isAdmin ? const Icon(Icons.shield, color: accent) : null),
       ])),
       const SizedBox(height: 20), const Text('SETTINGS', style: TextStyle(color: muted, letterSpacing: 2)), const SizedBox(height: 8),
@@ -642,7 +642,7 @@ class _ProfilePageState extends State<ProfilePage> {
       if (isAdmin) FilledButton.icon(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardPage())), icon: const Icon(Icons.admin_panel_settings), label: const Text('Open owner dashboard')),
       OutlinedButton.icon(onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout), label: const Text('Sign out')),
       const SizedBox(height: 20),
-      const Center(child: Text('JIKZO CHAT  •  Built for connection', style: TextStyle(color: muted, fontSize: 11))),
+      const Center(child: Text('NEXORA  •  Built for connection', style: TextStyle(color: muted, fontSize: 11))),
     ]));
   }
 }
@@ -828,7 +828,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         SizedBox(height: 8),
                         Text('Storage management'),
                         SizedBox(height: 5),
-                        Text('Your shared files are stored securely in JIKZO Chat cloud storage. Local cache and downloaded-file management will be added separately. This screen does not clear files from your phone.', style: TextStyle(color: muted, fontSize: 12)),
+                        Text('Your shared files are stored securely in Nexora cloud storage. Local cache and downloaded-file management will be added separately. This screen does not clear files from your phone.', style: TextStyle(color: muted, fontSize: 12)),
                       ]),
                     ),
                   ),
@@ -840,7 +840,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: ListTile(
                       leading: Icon(Icons.dark_mode_outlined, color: accent),
                       title: Text('Dark appearance'),
-                      subtitle: Text('JIKZO Chat currently uses its dark premium theme. More appearance controls will be added later.'),
+                      subtitle: Text('Nexora currently uses its dark premium theme. More appearance controls will be added later.'),
                     ),
                   ),
                 ],
@@ -1088,7 +1088,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         'moderation_reason': reason.text.trim(),
       });
       await Future.wait([loadStats(), loadUsers()]);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(status == 'suspended' ? 'Account restricted inside JIKZO Chat.' : 'Account restored.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(status == 'suspended' ? 'Account restricted inside Nexora.' : 'Account restored.')));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update account: $e')));
     } finally { reason.dispose(); if (mounted) setState(() => working = false); }
@@ -1107,7 +1107,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       });
       title.clear(); message.clear();
       await loadAnnouncements();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Announcement published to JIKZO Chat.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Announcement published to Nexora.')));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not publish announcement: $e')));
     } finally { if (mounted) setState(() => working = false); }
@@ -1182,7 +1182,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 enabled: !working,
                 onSelected: (v) => setUserStatus(u, v),
                 itemBuilder: (_) => [
-                  if (!suspended) const PopupMenuItem(value: 'suspended', child: Text('Restrict in JIKZO Chat')),
+                  if (!suspended) const PopupMenuItem(value: 'suspended', child: Text('Restrict in Nexora')),
                   if (suspended) const PopupMenuItem(value: 'active', child: Text('Restore account')),
                 ],
               ),
