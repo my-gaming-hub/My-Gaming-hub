@@ -1,7 +1,7 @@
 {
-  "name": "jikzo-chat-desktop",
+  "name": "nexora-desktop",
   "version": "0.2.0",
-  "description": "JIKZO Chat for Windows 7 and later",
+  "description": "Nexora for Windows 7 and later",
   "main": "electron/main.js",
   "author": "JIKZO Creative",
   "license": "UNLICENSED",
@@ -14,7 +14,7 @@
   },
   "build": {
     "appId": "com.jikzocreative.jikzochat",
-    "productName": "JIKZO Chat",
+    "productName": "Nexora",
     "directories": {
       "output": "dist"
     },
@@ -33,7 +33,7 @@
           ]
         }
       ],
-      "artifactName": "JIKZO-Chat-Setup-${arch}-${version}.${ext}"
+      "artifactName": "Nexora-Setup-${arch}-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
