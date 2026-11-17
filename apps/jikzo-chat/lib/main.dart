@@ -183,7 +183,8 @@ class _PeoplePageState extends State<PeoplePage> {
     try {
       final me = Supabase.instance.client.auth.currentUser!.id;
       var q = Supabase.instance.client.from('profiles').select('id,username,display_name').neq('id', me);
-      if (search.text.trim().isNotEmpty) { final v = search.text.trim(); q = q.or('username.ilike.%' + v + '%,display_name.ilike.%' + v + '%'); }
+      final v = search.text.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
+      if (v.isNotEmpty) { q = q.ilike('username', '%$v%'); }
       final rows = await q.order('username').limit(40);
       if (mounted) setState(() => people = List<Map<String, dynamic>>.from(rows));
     } catch (e) { if (mounted) setState(() => error = e.toString()); }
@@ -199,9 +200,9 @@ class _PeoplePageState extends State<PeoplePage> {
   }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Discover people')),
+    appBar: AppBar(title: const Text('Find people by username')),
     body: Column(children: [
-      Padding(padding: const EdgeInsets.all(16), child: TextField(controller: search, onSubmitted: (_) => load(), decoration: InputDecoration(hintText: 'Search by name or username', prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: load, icon: const Icon(Icons.arrow_forward)), filled: true, fillColor: panel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)))),
+      Padding(padding: const EdgeInsets.all(16), child: TextField(controller: search, onSubmitted: (_) => load(), decoration: InputDecoration(hintText: 'Search username (e.g. @alex)', prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: load, icon: const Icon(Icons.arrow_forward)), filled: true, fillColor: panel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none)))),
       if (busy) const Expanded(child: Center(child: CircularProgressIndicator()))
       else if (error != null) Expanded(child: Center(child: Text(error!)))
       else if (people.isEmpty) const Expanded(child: Center(child: Text('No users found. Invite a friend to join JIKZO Chat.')))
