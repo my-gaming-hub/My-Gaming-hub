@@ -170,12 +170,12 @@ class _InboxPageState extends State<InboxPage> {
         final others = await db.from('conversation_members').select('user_id').eq('conversation_id', cid).neq('user_id', me).limit(1);
         if (others.isEmpty) continue;
         final otherId = others.first['user_id'].toString();
-        final profile = await db.from('profiles').select('username,display_name').eq('id', otherId).maybeSingle();
+        final profile = await db.from('profiles').select('username,display_name,avatar_url').eq('id', otherId).maybeSingle();
         if (profile == null) continue;
         final latest = await db.from('messages').select('body').eq('conversation_id', cid).order('created_at', ascending: false).limit(1);
         final handle = profile['username'].toString();
         final display = (profile['display_name'] as String?)?.isNotEmpty == true ? profile['display_name'].toString() : handle;
-        items.add({'id': cid, 'name': display, 'handle': handle, 'last': latest.isEmpty ? 'No messages yet' : latest.first['body'].toString()});
+        items.add({'id': cid, 'name': display, 'handle': handle, 'avatar_url': profile['avatar_url'], 'last': latest.isEmpty ? 'No messages yet' : latest.first['body'].toString()});
       }
       if (mounted) setState(() => chats = items);
     } catch (e) { if (mounted) setState(() => error = e.toString()); }
@@ -193,7 +193,7 @@ class _InboxPageState extends State<InboxPage> {
       : RefreshIndicator(onRefresh: load, child: ListView.separated(itemCount: chats.length, separatorBuilder: (_, __) => const Divider(indent: 76, height: 1), itemBuilder: (context, i) {
           final chat = chats[i], title = chat['name'].toString();
           return ListTile(contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
-            leading: CircleAvatar(radius: 25, backgroundColor: accent, child: Text(title[0].toUpperCase())),
+            leading: CircleAvatar(radius: 25, backgroundColor: accent, backgroundImage: (chat['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(chat['avatar_url'].toString()) : null, child: (chat['avatar_url'] ?? '').toString().isNotEmpty ? null : Text(title.isEmpty ? 'J' : title[0].toUpperCase())),
             title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
             subtitle: Text(chat['last'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: muted)),
             trailing: const Icon(Icons.chevron_right, color: muted),
@@ -221,7 +221,7 @@ class _PeoplePageState extends State<PeoplePage> {
     setState(() { busy = true; error = null; });
     try {
       final me = Supabase.instance.client.auth.currentUser!.id;
-      var q = Supabase.instance.client.from('profiles').select('id,username,display_name').neq('id', me);
+      var q = Supabase.instance.client.from('profiles').select('id,username,display_name,avatar_url').neq('id', me);
       final v = search.text.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
       if (v.isNotEmpty) { q = q.ilike('username', '%$v%'); }
       final rows = await q.order('username').limit(40);
@@ -247,7 +247,7 @@ class _PeoplePageState extends State<PeoplePage> {
       else if (people.isEmpty) const Expanded(child: Center(child: Text('No users found. Invite a friend to join JIKZO Chat.')))
       else Expanded(child: RefreshIndicator(onRefresh: load, child: ListView.separated(itemCount: people.length, separatorBuilder: (_, __) => const Divider(indent: 72, height: 1), itemBuilder: (context, i) {
         final p = people[i], display = (p['display_name'] as String?)?.isNotEmpty == true ? p['display_name'].toString() : p['username'].toString();
-        return ListTile(leading: CircleAvatar(backgroundColor: accent, child: Text(display[0].toUpperCase())), title: Text(display), subtitle: Text('@' + p['username'].toString(), style: const TextStyle(color: muted)), trailing: const Icon(Icons.chat_outlined, color: accent), onTap: () => openChat(p));
+        return ListTile(leading: CircleAvatar(backgroundColor: accent, backgroundImage: (p['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(p['avatar_url'].toString()) : null, child: (p['avatar_url'] ?? '').toString().isNotEmpty ? null : Text(display.isEmpty ? 'J' : display[0].toUpperCase())), title: Text(display), subtitle: Text('@' + p['username'].toString(), style: const TextStyle(color: muted)), trailing: const Icon(Icons.chat_outlined, color: accent), onTap: () => openChat(p));
       }))),
     ]),
   );
@@ -310,10 +310,45 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 class _ProfilePageState extends State<ProfilePage> {
-  bool checking = true, isAdmin = false;
-  String? adminError;
+  bool checking = true, isAdmin = false, loadingProfile = true, uploadingPhoto = false;
+  String? adminError, avatarUrl, profileError;
   @override
-  void initState() { super.initState(); checkAdmin(); }
+  void initState() { super.initState(); checkAdmin(); loadProfile(); }
+
+  Future<void> loadProfile() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser!;
+      final row = await Supabase.instance.client.from('profiles').select('avatar_url').eq('id', user.id).maybeSingle();
+      if (mounted) setState(() => avatarUrl = row?['avatar_url']?.toString());
+    } catch (e) { if (mounted) setState(() => profileError = e.toString()); }
+    finally { if (mounted) setState(() => loadingProfile = false); }
+  }
+
+  Future<void> pickAndUploadProfilePhoto() async {
+    try {
+      final picked = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false, withData: true);
+      if (picked == null || picked.files.isEmpty) return;
+      final file = picked.files.single;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) throw Exception('Could not read that image. Please choose another photo.');
+      if (bytes.length > 5 * 1024 * 1024) throw Exception('Please choose an image smaller than 5 MB.');
+      final ext = (file.extension ?? '').toLowerCase();
+      const mimeTypes = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'};
+      final mime = mimeTypes[ext];
+      if (mime == null) throw Exception('Choose a JPG, PNG or WebP image.');
+      if (mounted) setState(() { uploadingPhoto = true; profileError = null; });
+      final user = Supabase.instance.client.auth.currentUser!;
+      final path = '${user.id}/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final storage = Supabase.instance.client.storage.from('jikzo-avatars');
+      await storage.uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime, upsert: true));
+      final publicUrl = storage.getPublicUrl(path);
+      await Supabase.instance.client.from('profiles').update({'avatar_url': publicUrl}).eq('id', user.id);
+      if (mounted) setState(() => avatarUrl = publicUrl);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile picture updated!')));
+    } catch (e) {
+      if (mounted) setState(() => profileError = e.toString());
+    } finally { if (mounted) setState(() => uploadingPhoto = false); }
+  }
   Future<void> checkAdmin() async {
     try {
       final user = Supabase.instance.client.auth.currentUser!;
@@ -330,7 +365,11 @@ class _ProfilePageState extends State<ProfilePage> {
     final display = meta['display_name']?.toString() ?? handle;
     return Scaffold(appBar: AppBar(title: const Text('Your profile')), body: ListView(padding: const EdgeInsets.all(18), children: [
       const SizedBox(height: 14),
-      CircleAvatar(radius: 42, backgroundColor: accent, child: Text(display.isEmpty ? 'J' : display[0].toUpperCase(), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold))),
+      CircleAvatar(radius: 48, backgroundColor: accent, backgroundImage: (avatarUrl ?? '').isNotEmpty ? NetworkImage(avatarUrl!) : null, child: (avatarUrl ?? '').isNotEmpty ? null : Text(display.isEmpty ? 'J' : display[0].toUpperCase(), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold))),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(onPressed: uploadingPhoto ? null : pickAndUploadProfilePhoto, icon: uploadingPhoto ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add_a_photo_outlined), label: Text(uploadingPhoto ? 'Uploading photo...' : 'Change profile picture')),
+      if (profileError != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(profileError!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.orangeAccent, fontSize: 12))),
+      if (loadingProfile) const LinearProgressIndicator(minHeight: 2),
       const SizedBox(height: 12),
       Text(display, textAlign: TextAlign.center, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
       Text('@' + handle, textAlign: TextAlign.center, style: const TextStyle(color: muted)),
