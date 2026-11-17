@@ -62,7 +62,7 @@ class Gate extends StatelessWidget {
                 const SizedBox(height: 18),
                 FilledButton.icon(onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout), label: const Text('Sign out')),
               ]),
-            )));
+            ))));
           }
           return const HomeShell();
         },
