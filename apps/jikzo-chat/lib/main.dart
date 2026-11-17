@@ -266,14 +266,14 @@ class _ProfilePageState extends State<ProfilePage> {
           trailing: isAdmin ? const Icon(Icons.shield, color: accent) : null),
       ])),
       const SizedBox(height: 20), const Text('SETTINGS', style: TextStyle(color: muted, letterSpacing: 2)), const SizedBox(height: 8),
-      Card(color: panel, child: Column(children: const [
-        ListTile(leading: Icon(Icons.palette_outlined), title: Text('Appearance'), subtitle: Text('Theme and chat look — coming soon')),
-        Divider(height: 1),
-        ListTile(leading: Icon(Icons.lock_outline), title: Text('Privacy and security'), subtitle: Text('Privacy controls — coming soon')),
-        Divider(height: 1),
-        ListTile(leading: Icon(Icons.notifications_outlined), title: Text('Notifications'), subtitle: Text('Notification controls — coming soon')),
-        Divider(height: 1),
-        ListTile(leading: Icon(Icons.storage_outlined), title: Text('Storage and data'), subtitle: Text('File storage tools — coming in a later stage')),
+      Card(color: panel, child: Column(children: [
+        ListTile(leading: const Icon(Icons.palette_outlined), title: const Text('Appearance'), subtitle: const Text('Theme and chat look'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage(section: 'Appearance')))),
+        const Divider(height: 1),
+        ListTile(leading: const Icon(Icons.lock_outline), title: const Text('Privacy and security'), subtitle: const Text('Profile visibility controls'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage(section: 'Privacy and security')))),
+        const Divider(height: 1),
+        ListTile(leading: const Icon(Icons.notifications_outlined), title: const Text('Notifications'), subtitle: const Text('Choose which alerts you prefer'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage(section: 'Notifications')))),
+        const Divider(height: 1),
+        ListTile(leading: const Icon(Icons.storage_outlined), title: const Text('Storage and data'), subtitle: const Text('Media download preferences'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsPage(section: 'Storage and data')))),
       ])),
       const SizedBox(height: 20),
       if (isAdmin) FilledButton.icon(onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Secure owner dashboard tools are planned for the next stage.'))), icon: const Icon(Icons.admin_panel_settings), label: const Text('Owner dashboard — next stage')),
@@ -281,6 +281,209 @@ class _ProfilePageState extends State<ProfilePage> {
       const SizedBox(height: 20),
       const Center(child: Text('JIKZO CHAT  •  Built for connection', style: TextStyle(color: muted, fontSize: 11))),
     ]));
+  }
+}
+
+class SettingsPage extends StatefulWidget {
+  final String section;
+  const SettingsPage({super.key, required this.section});
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  final db = Supabase.instance.client;
+  late Map<String, dynamic> values;
+  bool loading = true, saving = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    values = {
+      'profile_photo_visibility': 'everyone',
+      'bio_visibility': 'everyone',
+      'online_status_visibility': 'everyone',
+      'last_seen_visibility': 'everyone',
+      'private_messages_notifications': true,
+      'group_notifications': true,
+      'channel_notifications': true,
+      'notification_sound': true,
+      'notification_vibration': true,
+      'auto_download_media': false,
+    };
+    loadSettings();
+  }
+
+  Future<void> loadSettings() async {
+    try {
+      final row = await db.from('jikzo_user_settings')
+          .select()
+          .eq('user_id', db.auth.currentUser!.id)
+          .maybeSingle();
+      if (row != null && mounted) {
+        setState(() => values.addAll(Map<String, dynamic>.from(row)));
+      }
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> updateSetting(String key, dynamic value) async {
+    final previous = Map<String, dynamic>.from(values);
+    setState(() {
+      values[key] = value;
+      saving = true;
+      error = null;
+    });
+    try {
+      await db.from('jikzo_user_settings').upsert({
+        ...values,
+        'user_id': db.auth.currentUser!.id,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          values = previous;
+          error = e.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save setting: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Widget visibilityTile(String key, String title, String subtitle) {
+    final current = (values[key] ?? 'everyone').toString();
+    return ListTile(
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: SizedBox(
+        width: 142,
+        child: DropdownButtonFormField<String>(
+          value: current,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'everyone', child: Text('Everyone')),
+            DropdownMenuItem(value: 'contacts', child: Text('Contacts')),
+            DropdownMenuItem(value: 'nobody', child: Text('Nobody')),
+          ],
+          onChanged: saving ? null : (v) {
+            if (v != null) updateSetting(key, v);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget switchTile(String key, String title, String subtitle) {
+    return SwitchListTile(
+      value: values[key] == true,
+      onChanged: saving ? null : (v) => updateSetting(key, v),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      activeColor: accent,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPrivacy = widget.section == 'Privacy and security';
+    final isNotifications = widget.section == 'Notifications';
+    final isStorage = widget.section == 'Storage and data';
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.section)),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (saving)
+                  const LinearProgressIndicator(minHeight: 2),
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(error!, style: const TextStyle(color: Colors.orangeAccent)),
+                  ),
+                if (isPrivacy) ...[
+                  const Text('PROFILE VISIBILITY', style: TextStyle(color: muted, letterSpacing: 1.5)),
+                  const SizedBox(height: 8),
+                  Card(
+                    color: panel,
+                    child: Column(children: [
+                      visibilityTile('profile_photo_visibility', 'Profile photo', 'Who can see your profile photo'),
+                      const Divider(height: 1),
+                      visibilityTile('bio_visibility', 'About / bio', 'Who can see your profile description'),
+                      const Divider(height: 1),
+                      visibilityTile('online_status_visibility', 'Online status', 'Who can see when you are online'),
+                      const Divider(height: 1),
+                      visibilityTile('last_seen_visibility', 'Last seen', 'Who can see your last active time'),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('These preferences are saved to your account. They still need to be enforced in profile and presence queries before they provide complete privacy.', style: TextStyle(color: muted, fontSize: 12)),
+                ] else if (isNotifications) ...[
+                  const Text('NOTIFICATION PREFERENCES', style: TextStyle(color: muted, letterSpacing: 1.5)),
+                  const SizedBox(height: 8),
+                  Card(
+                    color: panel,
+                    child: Column(children: [
+                      switchTile('private_messages_notifications', 'Private messages', 'Message notification preference'),
+                      switchTile('group_notifications', 'Groups', 'Group activity notification preference'),
+                      switchTile('channel_notifications', 'Channels', 'Channel update notification preference'),
+                      const Divider(height: 1),
+                      switchTile('notification_sound', 'Notification sound', 'Sound preference'),
+                      switchTile('notification_vibration', 'Vibration', 'Vibration preference'),
+                    ]),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('These preferences are saved. Actual background push notifications and delivery will be connected in a later build.', style: TextStyle(color: muted, fontSize: 12)),
+                ] else if (isStorage) ...[
+                  const Text('MEDIA AND DATA', style: TextStyle(color: muted, letterSpacing: 1.5)),
+                  const SizedBox(height: 8),
+                  Card(
+                    color: panel,
+                    child: switchTile('auto_download_media', 'Automatic media download', 'Allow the app to automatically download shared media when that feature is available'),
+                  ),
+                  const SizedBox(height: 12),
+                  const Card(
+                    color: panel,
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Icon(Icons.info_outline, color: accent),
+                        SizedBox(height: 8),
+                        Text('Storage management'),
+                        SizedBox(height: 5),
+                        Text('Your shared files are stored securely in JIKZO Chat cloud storage. Local cache and downloaded-file management will be added separately. This screen does not clear files from your phone.', style: TextStyle(color: muted, fontSize: 12)),
+                      ]),
+                    ),
+                  ),
+                ] else ...[
+                  const Text('APPEARANCE', style: TextStyle(color: muted, letterSpacing: 1.5)),
+                  const SizedBox(height: 8),
+                  const Card(
+                    color: panel,
+                    child: ListTile(
+                      leading: Icon(Icons.dark_mode_outlined, color: accent),
+                      title: Text('Dark appearance'),
+                      subtitle: Text('JIKZO Chat currently uses its dark premium theme. More appearance controls will be added later.'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+    );
   }
 }
 
