@@ -1,0 +1,90 @@
+name: Build JIKZO Chat PC
+
+on:
+  push:
+    branches: [jikzo-chat-pc]
+    paths:
+      - 'apps/jikzo-chat/**'
+      - '.github/workflows/build-jikzo-chat-pc.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/jikzo-chat
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build browser version
+        run: flutter build web --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: Upload browser build
+        uses: actions/upload-artifact@v4
+        with:
+          name: jikzo-chat-web
+          path: apps/jikzo-chat/build/web
+          if-no-files-found: error
+
+      - name: Prepare desktop web files
+        run: |
+          mkdir -p desktop/web-dist
+          cp -R build/web/. desktop/web-dist/
+
+  build-windows:
+    needs: build-web
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/jikzo-chat/desktop
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/jikzo-chat/desktop/package-lock.json
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build Flutter web app for desktop package
+        working-directory: apps/jikzo-chat
+        run: |
+          flutter pub get
+          flutter build web --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          New-Item -ItemType Directory -Force -Path desktop/web-dist | Out-Null
+          Copy-Item -Path build/web/* -Destination desktop/web-dist -Recurse -Force
+
+      - name: Install desktop packaging dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Package Windows installer
+        run: npm run dist:win
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: jikzo-chat-windows-installer
+          path: apps/jikzo-chat/desktop/dist/*.exe
+          if-no-files-found: error
