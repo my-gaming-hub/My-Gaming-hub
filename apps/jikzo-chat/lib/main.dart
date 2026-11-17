@@ -3,7 +3,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-const bg = Color(0xFF090D18), panel = Color(0xFF141D30), muted = Color(0xFF929DB3), accent = Color(0xFF8178FF);
+const bg = Color(0xFF070B18);
+const panel = Color(0xFF111A2D);
+const panelRaised = Color(0xFF17233A);
+const muted = Color(0xFF9AA8C0);
+const accent = Color(0xFF8057FF);
+const cyan = Color(0xFF00D8FF);
+const glow = Color(0xFFB34DFF);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,7 +26,54 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Nexora', debugShowCheckedModeBanner: false,
-    theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: bg, colorScheme: ColorScheme.fromSeed(seedColor: accent, brightness: Brightness.dark), useMaterial3: true),
+    theme: ThemeData(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: bg,
+      canvasColor: bg,
+      cardColor: panel,
+      dividerColor: const Color(0xFF26334B),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: accent,
+        primary: accent,
+        secondary: cyan,
+        surface: panel,
+        brightness: Brightness.dark,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: bg,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: 0.2, color: Colors.white),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: panelRaised,
+        hintStyle: const TextStyle(color: muted),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF26334B))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: cyan, width: 1.3)),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: accent,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: panel,
+        indicatorColor: accent.withValues(alpha: 0.24),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+          color: states.contains(WidgetState.selected) ? Colors.white : muted,
+          fontWeight: states.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
+        )),
+      ),
+      useMaterial3: true,
+    ),
     home: configured ? const Gate() : const Scaffold(body: Center(child: Padding(padding: EdgeInsets.all(24), child: Text('NEXORA\n\nBuild configuration is missing. Check GitHub Actions secrets.', textAlign: TextAlign.center)))),
   );
 }
@@ -128,23 +181,89 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int selected = 0;
   void openChat(String id, String name, String handle) => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: id, name: name, handle: handle)));
+
+  static const destinations = [
+    NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Chats'),
+    NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'People'),
+    NavigationDestination(icon: Icon(Icons.cell_tower_outlined), selectedIcon: Icon(Icons.cell_tower), label: 'Channels'),
+    NavigationDestination(icon: Icon(Icons.campaign_outlined), selectedIcon: Icon(Icons.campaign), label: 'Updates'),
+    NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final pages = [InboxPage(onOpenChat: openChat), PeoplePage(onOpenChat: openChat), const ChannelsPage(), const UpdatesPage(), const ProfilePage()];
-    return Scaffold(
-      body: IndexedStack(index: selected, children: pages),
-      bottomNavigationBar: NavigationBar(
-        backgroundColor: panel, indicatorColor: accent.withValues(alpha: 0.25), selectedIndex: selected,
-        onDestinationSelected: (v) => setState(() => selected = v),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Chats'),
-          NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'People'),
-          NavigationDestination(icon: Icon(Icons.cell_tower_outlined), selectedIcon: Icon(Icons.cell_tower), label: 'Channels'),
-          NavigationDestination(icon: Icon(Icons.campaign_outlined), selectedIcon: Icon(Icons.campaign), label: 'Updates'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
-        ],
-      ),
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      final desktop = constraints.maxWidth >= 850;
+      return Scaffold(
+        body: desktop
+          ? Row(children: [
+              Container(
+                width: 246,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0C1324),
+                  border: Border(right: BorderSide(color: Color(0xFF26334B))),
+                ),
+                child: Column(children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 28, 18, 24),
+                    child: Row(children: [
+                      Container(
+                        width: 42, height: 42,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          gradient: const LinearGradient(colors: [accent, cyan, glow], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                          boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.35), blurRadius: 20)],
+                        ),
+                        child: const Icon(Icons.hub_rounded, color: Colors.white, size: 25),
+                      ),
+                      const SizedBox(width: 12),
+                      const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('NEXORA', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                        Text('Connect. Share. Belong.', style: TextStyle(fontSize: 9, color: muted)),
+                      ]),
+                    ]),
+                  ),
+                  Expanded(child: NavigationRail(
+                    backgroundColor: Colors.transparent,
+                    extended: true,
+                    minExtendedWidth: 246,
+                    selectedIndex: selected,
+                    onDestinationSelected: (v) => setState(() => selected = v),
+                    useIndicator: true,
+                    indicatorColor: accent.withValues(alpha: 0.22),
+                    selectedIconTheme: const IconThemeData(color: cyan),
+                    unselectedIconTheme: const IconThemeData(color: muted),
+                    selectedLabelTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    unselectedLabelTextStyle: const TextStyle(color: muted),
+                    destinations: const [
+                      NavigationRailDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: Text('Chats')),
+                      NavigationRailDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: Text('People')),
+                      NavigationRailDestination(icon: Icon(Icons.cell_tower_outlined), selectedIcon: Icon(Icons.cell_tower), label: Text('Channels')),
+                      NavigationRailDestination(icon: Icon(Icons.campaign_outlined), selectedIcon: Icon(Icons.campaign), label: Text('Updates')),
+                      NavigationRailDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: Text('Profile')),
+                    ],
+                  )),
+                  const Padding(
+                    padding: EdgeInsets.all(18),
+                    child: Row(children: [
+                      Icon(Icons.circle, size: 8, color: cyan),
+                      SizedBox(width: 8),
+                      Text('Nexora beta', style: TextStyle(color: muted, fontSize: 11)),
+                    ]),
+                  ),
+                ]),
+              ),
+              Expanded(child: IndexedStack(index: selected, children: pages)),
+            ])
+          : IndexedStack(index: selected, children: pages),
+        bottomNavigationBar: desktop ? null : NavigationBar(
+          selectedIndex: selected,
+          onDestinationSelected: (v) => setState(() => selected = v),
+          destinations: destinations,
+        ),
+      );
+    });
   }
 }
 
