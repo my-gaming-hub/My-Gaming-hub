@@ -28,11 +28,12 @@
         {
           "target": "nsis",
           "arch": [
+            "ia32",
             "x64"
           ]
         }
       ],
-      "artifactName": "JIKZO-Chat-Setup-${version}.${ext}"
+      "artifactName": "JIKZO-Chat-Setup-${arch}-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
