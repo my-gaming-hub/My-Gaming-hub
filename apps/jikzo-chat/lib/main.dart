@@ -687,10 +687,61 @@ class _ChatPageState extends State<ChatPage> {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           final rows = snapshot.data!;
           if (rows.isEmpty) return const Center(child: Text('Say hello and start chatting 👋', style: TextStyle(color: muted)));
-          return ListView.builder(padding: const EdgeInsets.all(16), itemCount: rows.length, itemBuilder: (_, i) {
-            final row = rows[i], mine = row['sender_id'] == me;
-            return Align(alignment: mine ? Alignment.centerRight : Alignment.centerLeft, child: Container(constraints: const BoxConstraints(maxWidth: 300), margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11), decoration: BoxDecoration(color: mine ? const Color(0xFF5149B9) : panel, borderRadius: BorderRadius.circular(17)), child: Text(row['body'].toString())));
-          });
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+            itemCount: rows.length,
+            itemBuilder: (_, i) {
+              final row = rows[i];
+              final mine = row['sender_id'] == me;
+              final time = DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal();
+              final timeLabel = time == null
+                  ? ''
+                  : '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Align(
+                  alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.78,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+                          decoration: BoxDecoration(
+                            color: mine ? const Color(0xFF5149B9) : panel,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(18),
+                              topRight: const Radius.circular(18),
+                              bottomLeft: Radius.circular(mine ? 18 : 5),
+                              bottomRight: Radius.circular(mine ? 5 : 18),
+                            ),
+                          ),
+                          child: Text(
+                            row['body'].toString(),
+                            textAlign: TextAlign.left,
+                            softWrap: true,
+                            style: const TextStyle(fontSize: 15, height: 1.35),
+                          ),
+                        ),
+                        if (timeLabel.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4, left: 5, right: 5),
+                            child: Text(
+                              timeLabel,
+                              style: const TextStyle(color: muted, fontSize: 10),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
         })),
         if (loadingFiles || attachments.isNotEmpty)
           SizedBox(height: 76, child: loadingFiles ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))) : ListView.separated(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5), itemCount: attachments.length, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (_, i) {
