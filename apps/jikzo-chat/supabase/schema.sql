@@ -52,14 +52,14 @@ create table if not exists public.jikzo_admins (
   granted_at timestamptz not null default now()
 );
 alter table public.jikzo_admins enable row level security;
+create or replace function public.is_jikzo_admin()
+returns boolean language sql stable security definer set search_path=public
+as $ select exists(select 1 from public.jikzo_admins where user_id=auth.uid()); $;
+grant execute on function public.is_jikzo_admin() to authenticated;
 drop policy if exists "jikzo_admins_read_self_or_admin" on public.jikzo_admins;
 create policy "jikzo_admins_read_self_or_admin" on public.jikzo_admins
   for select to authenticated
   using (user_id = auth.uid() or public.is_jikzo_admin());
-create or replace function public.is_jikzo_admin()
-returns boolean language sql stable security definer set search_path=public
-as $$ select exists(select 1 from public.jikzo_admins where user_id=auth.uid()); $$;
-grant execute on function public.is_jikzo_admin() to authenticated;
 do $$
 declare owner_id uuid;
 begin
