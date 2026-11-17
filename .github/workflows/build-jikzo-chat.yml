@@ -1,4 +1,4 @@
-name: Build JIKZO Chat APK
+name: Build Nexora Android APK
 
 on:
   push:
@@ -35,6 +35,19 @@ jobs:
 
       - name: Generate Android platform files
         run: flutter create . --platforms=android
+
+      - name: Set Android app display name
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          source = manifest.read_text()
+          source, count = re.subn(r'android:label="[^"]*"', 'android:label="Nexora"', source, count=1)
+          if count != 1:
+              raise SystemExit("Could not set Android app label")
+          manifest.write_text(source)
+          PY
 
       - name: Set Android compile SDK to 36
         run: |
@@ -98,6 +111,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jikzo-chat-android-apk
+          name: nexora-android-apk
           path: apps/jikzo-chat/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
