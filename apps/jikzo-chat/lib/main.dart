@@ -30,7 +30,44 @@ class Gate extends StatelessWidget {
   @override
   Widget build(BuildContext context) => StreamBuilder<AuthState>(
     stream: Supabase.instance.client.auth.onAuthStateChange,
-    builder: (_, __) => Supabase.instance.client.auth.currentUser == null ? const AuthPage() : const HomeShell(),
+    builder: (context, snapshot) {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return const AuthPage();
+      return FutureBuilder<Map<String, dynamic>?>(
+        future: Supabase.instance.client.from('jikzo_user_moderation')
+            .select('status,reason').eq('user_id', user.id).maybeSingle(),
+        builder: (context, status) {
+          if (status.connectionState != ConnectionState.done) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
+          if (status.hasError) {
+            return Scaffold(body: Center(child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Could not verify account status. Please check your connection and try again.\\n\\n${status.error}', textAlign: TextAlign.center),
+            )));
+          }
+          if (status.data?['status'] == 'suspended') {
+            return Scaffold(body: SafeArea(child: Center(child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.lock_outline, size: 58, color: Colors.orangeAccent),
+                const SizedBox(height: 16),
+                const Text('Account restricted', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                const Text('This account has been temporarily restricted by JIKZO Chat administration.', textAlign: TextAlign.center),
+                if ((status.data?['reason'] ?? '').toString().isNotEmpty) Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text('Reason: ${status.data!['reason']}', textAlign: TextAlign.center, style: const TextStyle(color: muted)),
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout), label: const Text('Sign out')),
+              ]),
+            )));
+          }
+          return const HomeShell();
+        },
+      );
+    },
   );
 }
 
@@ -216,14 +253,55 @@ class _PeoplePageState extends State<PeoplePage> {
   );
 }
 
-class UpdatesPage extends StatelessWidget {
+class UpdatesPage extends StatefulWidget {
   const UpdatesPage({super.key});
   @override
-  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Updates')), body: Center(child: Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisSize: MainAxisSize.min, children: const [
-    Icon(Icons.campaign_outlined, size: 60, color: accent), SizedBox(height: 16),
-    Text('Channels and communities', style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)), SizedBox(height: 8),
-    Text('This space is ready for JIKZO channels and group updates. The next build stage will connect it to real groups and channels.', textAlign: TextAlign.center, style: TextStyle(color: muted)),
-  ]))));
+  State<UpdatesPage> createState() => _UpdatesPageState();
+}
+class _UpdatesPageState extends State<UpdatesPage> {
+  bool loading = true;
+  String? error;
+  List<Map<String, dynamic>> announcements = [];
+  @override
+  void initState() { super.initState(); load(); }
+  Future<void> load() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final rows = await Supabase.instance.client.from('jikzo_admin_announcements')
+          .select('id,title,message,created_at').order('created_at', ascending: false).limit(50);
+      if (mounted) setState(() => announcements = List<Map<String, dynamic>>.from(rows));
+    } catch (e) { if (mounted) setState(() => error = e.toString()); }
+    finally { if (mounted) setState(() => loading = false); }
+  }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Updates'), actions: [IconButton(onPressed: loading ? null : load, icon: const Icon(Icons.refresh))]),
+    body: loading ? const Center(child: CircularProgressIndicator())
+      : error != null ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Could not load updates: $error')))
+      : RefreshIndicator(onRefresh: load, child: ListView(padding: const EdgeInsets.all(16), children: [
+          const Card(color: panel, child: ListTile(
+            leading: Icon(Icons.campaign_outlined, color: accent, size: 30),
+            title: Text('JIKZO announcements', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('Official updates from the JIKZO Chat owner.', style: TextStyle(color: muted)),
+          )),
+          if (announcements.isEmpty) const Padding(
+            padding: EdgeInsets.all(30),
+            child: Text('No announcements yet. Check back later.', textAlign: TextAlign.center, style: TextStyle(color: muted)),
+          ),
+          ...announcements.map((a) => Card(color: panel, child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(a['title'].toString(), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(a['message'].toString()),
+              const SizedBox(height: 10),
+              Text(a['created_at'].toString(), style: const TextStyle(color: muted, fontSize: 11)),
+            ]),
+          ))),
+          const SizedBox(height: 12),
+          const Text('Groups and public channels are still being built.', textAlign: TextAlign.center, style: TextStyle(color: muted, fontSize: 12)),
+        ])),
+  );
 }
 
 class ProfilePage extends StatefulWidget {
