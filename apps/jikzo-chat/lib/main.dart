@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -181,8 +182,51 @@ class HomeShell extends StatefulWidget {
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
   int selected = 0;
+  Timer? _presenceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _setPresence(true);
+    _presenceTimer = Timer.periodic(const Duration(seconds: 30), (_) => _setPresence(true));
+  }
+
+  Future<void> _setPresence(bool online) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      await Supabase.instance.client.from('nexora_presence').upsert({
+        'user_id': user.id,
+        'is_online': online,
+        'last_seen_at': DateTime.now().toUtc().toIso8601String(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id');
+    } catch (_) {
+      // A missed heartbeat is harmless; the next heartbeat retries.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _setPresence(true);
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _setPresence(false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _presenceTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _setPresence(false);
+    super.dispose();
+  }
   void openChat(String id, String name, String handle) => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: id, name: name, handle: handle)));
 
   static const destinations = [
@@ -334,6 +378,7 @@ class PeoplePage extends StatefulWidget {
 class _PeoplePageState extends State<PeoplePage> {
   final search = TextEditingController();
   List<Map<String, dynamic>> people = [];
+  final Map<String, Map<String, dynamic>> presence = {};
   bool busy = false;
   String? error;
   @override
@@ -348,7 +393,21 @@ class _PeoplePageState extends State<PeoplePage> {
       final v = search.text.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
       if (v.isNotEmpty) { q = q.ilike('username', '%$v%'); }
       final rows = await q.order('username').limit(40);
-      if (mounted) setState(() => people = List<Map<String, dynamic>>.from(rows));
+      final found = List<Map<String, dynamic>>.from(rows);
+      final ids = found.map((p) => p['id'].toString()).toList();
+      final statuses = ids.isEmpty
+          ? <dynamic>[]
+          : await Supabase.instance.client.rpc('nexora_get_presence', params: {'target_users': ids});
+      final statusMap = <String, Map<String, dynamic>>{
+        for (final item in statuses)
+          item['user_id'].toString(): Map<String, dynamic>.from(item),
+      };
+      if (mounted) setState(() {
+        people = found;
+        presence
+          ..clear()
+          ..addAll(statusMap);
+      });
     } catch (e) { if (mounted) setState(() => error = e.toString()); }
     finally { if (mounted) setState(() => busy = false); }
   }
@@ -370,7 +429,30 @@ class _PeoplePageState extends State<PeoplePage> {
       else if (people.isEmpty) const Expanded(child: Center(child: Text('No users found. Invite a friend to join Nexora.')))
       else Expanded(child: RefreshIndicator(onRefresh: load, child: ListView.separated(itemCount: people.length, separatorBuilder: (_, __) => const Divider(indent: 72, height: 1), itemBuilder: (context, i) {
         final p = people[i], display = (p['display_name'] as String?)?.isNotEmpty == true ? p['display_name'].toString() : p['username'].toString();
-        return ListTile(leading: CircleAvatar(backgroundColor: accent, backgroundImage: (p['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(p['avatar_url'].toString()) : null, child: (p['avatar_url'] ?? '').toString().isNotEmpty ? null : Text(display.isEmpty ? 'J' : display[0].toUpperCase())), title: Text(display), subtitle: Text('@' + p['username'].toString(), style: const TextStyle(color: muted)), trailing: const Icon(Icons.chat_outlined, color: accent), onTap: () => openChat(p));
+        final status = presence[p['id'].toString()];
+        final isOnline = status?['is_online'] == true &&
+            DateTime.tryParse(status?['last_seen_at']?.toString() ?? '')?.isAfter(
+              DateTime.now().toUtc().subtract(const Duration(seconds: 90)),
+            ) == true;
+        final lastSeen = DateTime.tryParse(status?['last_seen_at']?.toString() ?? '')?.toLocal();
+        final statusText = isOnline
+            ? 'Online'
+            : lastSeen == null
+                ? 'Offline'
+                : 'Last seen ${lastSeen.day.toString().padLeft(2, '0')}/${lastSeen.month.toString().padLeft(2, '0')} ${lastSeen.hour.toString().padLeft(2, '0')}:${lastSeen.minute.toString().padLeft(2, '0')}';
+        return ListTile(
+          leading: Stack(children: [
+            CircleAvatar(backgroundColor: accent, backgroundImage: (p['avatar_url'] ?? '').toString().isNotEmpty ? NetworkImage(p['avatar_url'].toString()) : null, child: (p['avatar_url'] ?? '').toString().isNotEmpty ? null : Text(display.isEmpty ? 'J' : display[0].toUpperCase())),
+            if (isOnline) Positioned(right: 0, bottom: 0, child: Container(width: 13, height: 13, decoration: BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle, border: Border.all(color: bg, width: 2)))),
+          ]),
+          title: Text(display),
+          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('@' + p['username'].toString(), style: const TextStyle(color: muted)),
+            Text(statusText, style: TextStyle(color: isOnline ? Colors.greenAccent : muted, fontSize: 11)),
+          ]),
+          trailing: const Icon(Icons.chat_outlined, color: accent),
+          onTap: () => openChat(p),
+        );
       }))),
     ]),
   );
