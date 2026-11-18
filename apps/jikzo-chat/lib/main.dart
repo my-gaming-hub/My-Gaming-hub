@@ -1338,7 +1338,7 @@ class _ChatPageState extends State<ChatPage> {
                   ? ''
                   : '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.only(bottom: 7),
                 child: Align(
                   alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
                   child: ConstrainedBox(
@@ -1352,7 +1352,7 @@ class _ChatPageState extends State<ChatPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
                           decoration: BoxDecoration(
-                            color: mine ? const Color(0xFF5149B9) : panel,
+                            color: mine ? QTheme.accent : const Color(0xFF17233A),
                             borderRadius: BorderRadius.only(
                               topLeft: const Radius.circular(18),
                               topRight: const Radius.circular(18),
@@ -1364,7 +1364,7 @@ class _ChatPageState extends State<ChatPage> {
                             row['body'].toString(),
                             textAlign: TextAlign.left,
                             softWrap: true,
-                            style: const TextStyle(fontSize: 15, height: 1.35),
+                            style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4, fontWeight: FontWeight.w500),
                           ),
                         ),
                         if (timeLabel.isNotEmpty)
@@ -1389,17 +1389,18 @@ class _ChatPageState extends State<ChatPage> {
             return InkWell(onTap: () => downloadAttachment(file), borderRadius: BorderRadius.circular(12), child: Container(width: 210, padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(12)), child: Row(children: [
               const Icon(Icons.insert_drive_file_outlined, color: accent, size: 25), const SizedBox(width: 8),
               Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(file['file_name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                Text(fileSizeLabel(file['file_size']), style: const TextStyle(color: muted, fontSize: 10)),
+                Text(file['file_name'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                
+                Text(fileSizeLabel(file['file_size']), style: const TextStyle(color: Color(0xFFB5C1D5), fontSize: 10)), 
               ])),
-              const Icon(Icons.download_rounded, size: 18, color: muted),
+              const Icon(Icons.download_rounded, size: 19, color: accent),
             ])));
           })),
         SafeArea(top: false, child: Padding(padding: const EdgeInsets.all(12), child: Row(children: [
-          IconButton(onPressed: uploading ? null : pickAndUpload, tooltip: 'Share a file', icon: uploading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.attach_file, color: accent)),
-          Expanded(child: TextField(controller: input, minLines: 1, maxLines: 4, onSubmitted: (_) => send(), decoration: InputDecoration(hintText: 'Write a message...', filled: true, fillColor: panel, border: OutlineInputBorder(borderRadius: BorderRadius.circular(22), borderSide: BorderSide.none)))),
+          IconButton.filledTonal(onPressed: uploading ? null : pickAndUpload, tooltip: 'Share a file', icon: uploading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add_rounded, color: accent)), 
+          Expanded(child: TextField(controller: input, minLines: 1, maxLines: 4, onSubmitted: (_) => send(), decoration: InputDecoration(hintText: 'Write a message...', filled: true, fillColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF17233A) : const Color(0xFFE9EEF8), border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none)))),
           const SizedBox(width: 8),
-          IconButton.filled(style: IconButton.styleFrom(backgroundColor: accent), onPressed: sending ? null : send, icon: const Icon(Icons.send)),
+          IconButton.filled(style: IconButton.styleFrom(backgroundColor: QTheme.accent, foregroundColor: Colors.white, fixedSize: const Size(48, 48)), onPressed: sending ? null : send, icon: const Icon(Icons.send_rounded)), 
         ]))),
       ]));
   }
