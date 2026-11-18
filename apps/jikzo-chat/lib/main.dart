@@ -26,6 +26,7 @@ Future<void> main() async {
 class QTheme {
   static final ValueNotifier<String> preset = ValueNotifier<String>('Neon Violet');
   static final ValueNotifier<ThemeMode> mode = ValueNotifier<ThemeMode>(ThemeMode.dark);
+  static final ValueNotifier<Color> customAccent = ValueNotifier<Color>(const Color(0xFF19B5FE));
   static const Map<String, Color> accents = {
     'Neon Violet': Color(0xFF8057FF),
     'Ocean Blue': Color(0xFF168BFF),
@@ -33,11 +34,12 @@ class QTheme {
     'Rose Glow': Color(0xFFE84D91),
     'Sunset Orange': Color(0xFFE87932),
   };
-  static Color get accent => accents[preset.value] ?? accents['Neon Violet']!;
+  static Color get accent => preset.value == 'Custom' ? customAccent.value : (accents[preset.value] ?? accents['Neon Violet']!);
   static Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString('qelvyro_theme') ?? 'Neon Violet';
-    preset.value = accents.containsKey(saved) ? saved : 'Neon Violet';
+    preset.value = accents.containsKey(saved) || saved == 'Custom' ? saved : 'Neon Violet';
+    customAccent.value = Color(prefs.getInt('qelvyro_custom_accent') ?? const Color(0xFF19B5FE).value);
     final savedMode = prefs.getString('qelvyro_theme_mode') ?? 'dark';
     mode.value = savedMode == 'light' ? ThemeMode.light : ThemeMode.dark;
   }
@@ -46,6 +48,13 @@ class QTheme {
     preset.value = name;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('qelvyro_theme', name);
+  }
+  static Future<void> chooseCustom(Color value) async {
+    customAccent.value = value;
+    preset.value = 'Custom';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('qelvyro_theme', 'Custom');
+    await prefs.setInt('qelvyro_custom_accent', value.value);
   }
   static Future<void> chooseMode(ThemeMode value) async {
     mode.value = value;
@@ -1032,6 +1041,39 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _createCustomTheme() async {
+    var color = QTheme.customAccent.value;
+    final chosen = await showDialog<Color>(context: context, builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        title: const Text('Create your theme'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 58, height: 58, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(18))),
+          const SizedBox(height: 14),
+          for (final channel in [0, 1, 2]) Slider(
+            value: channel == 0 ? color.red.toDouble() : channel == 1 ? color.green.toDouble() : color.blue.toDouble(),
+            min: 0, max: 255, divisions: 255,
+            activeColor: color,
+            onChanged: (v) => setDialogState(() {
+              final r = channel == 0 ? v.round() : color.red;
+              final g = channel == 1 ? v.round() : color.green;
+              final b = channel == 2 ? v.round() : color.blue;
+              color = Color.fromARGB(255, r, g, b);
+            }),
+          ),
+          const Text('Adjust the red, green and blue sliders to make your colour.'),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, color), child: const Text('Save theme')),
+        ],
+      ),
+    ));
+    if (chosen != null) {
+      await QTheme.chooseCustom(chosen);
+      if (mounted) setState(() {});
+    }
+  }
+
   Widget visibilityTile(String key, String title, String subtitle) {
     final current = (values[key] ?? 'everyone').toString();
     return ListTile(
@@ -1105,7 +1147,13 @@ class _SettingsPageState extends State<SettingsPage> {
                         trailing: selected ? Icon(Icons.check_circle, color: entry.value) : const Icon(Icons.circle_outlined),
                         onTap: () async { await QTheme.choose(entry.key); if (mounted) setState(() {}); },
                       );
-                    }).toList()),
+                    }).toList()..add(ListTile(
+                      leading: const Icon(Icons.add_circle_outline),
+                      title: const Text('Create a custom theme'),
+                      subtitle: const Text('Choose your own accent colour'),
+                      trailing: QTheme.preset.value == 'Custom' ? Icon(Icons.check_circle, color: QTheme.customAccent.value) : const Icon(Icons.chevron_right),
+                      onTap: () => _createCustomTheme(),
+                    ))),
                   ),
                   const SizedBox(height: 18),
                   const Text('DISPLAY MODE', style: TextStyle(color: muted, letterSpacing: 1.5)),
