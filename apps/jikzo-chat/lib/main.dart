@@ -26,7 +26,7 @@ class App extends StatelessWidget {
   const App({super.key, required this.configured});
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Nexora', debugShowCheckedModeBanner: false,
+    title: 'QELVYRO', debugShowCheckedModeBanner: false,
     theme: ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: bg,
@@ -75,7 +75,7 @@ class App extends StatelessWidget {
       ),
       useMaterial3: true,
     ),
-    home: configured ? const Gate() : const Scaffold(body: Center(child: Padding(padding: EdgeInsets.all(24), child: Text('NEXORA\n\nBuild configuration is missing. Check GitHub Actions secrets.', textAlign: TextAlign.center)))),
+    home: configured ? const Gate() : const Scaffold(body: Center(child: Padding(padding: EdgeInsets.all(24), child: Text('QELVYRO\n\nBuild configuration is missing. Check GitHub Actions secrets.', textAlign: TextAlign.center)))),
   );
 }
 
@@ -108,7 +108,7 @@ class Gate extends StatelessWidget {
                 const SizedBox(height: 16),
                 const Text('Account restricted', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text('This account has been temporarily restricted by Nexora administration.', textAlign: TextAlign.center),
+                const Text('This account has been temporarily restricted by QELVYRO administration.', textAlign: TextAlign.center),
                 if ((status.data?['reason'] ?? '').toString().isNotEmpty) Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: Text('Reason: ${status.data!['reason']}', textAlign: TextAlign.center, style: const TextStyle(color: muted)),
@@ -164,7 +164,7 @@ class _AuthPageState extends State<AuthPage> {
     constraints: const BoxConstraints(maxWidth: 440), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Container(width: 76, height: 76, alignment: Alignment.center, decoration: BoxDecoration(borderRadius: BorderRadius.circular(25), gradient: const LinearGradient(colors: [accent, cyan, glow], begin: Alignment.topLeft, end: Alignment.bottomRight), boxShadow: [BoxShadow(color: accent.withValues(alpha: 0.28), blurRadius: 28, spreadRadius: 2)]), child: const Icon(Icons.hub_rounded, size: 42, color: Colors.white)),
       const SizedBox(height: 16),
-      const Text('NEXORA', textAlign: TextAlign.center, style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: 3)),
+      const Text('QELVYRO', textAlign: TextAlign.center, style: TextStyle(fontSize: 27, fontWeight: FontWeight.w900, letterSpacing: 3)),
       const SizedBox(height: 5), const Text('CONNECT. SHARE. BELONG.', textAlign: TextAlign.center, style: TextStyle(color: cyan, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.8)),
       const SizedBox(height: 30), Text(signup ? 'Create your account' : 'Welcome back', textAlign: TextAlign.center, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
       const SizedBox(height: 7), Text(signup ? 'Join conversations and communities.' : 'Sign in to continue your conversations.', textAlign: TextAlign.center, style: const TextStyle(color: muted)), const SizedBox(height: 22),
@@ -266,7 +266,7 @@ class _HomeShellState extends State<HomeShell> with WidgetsBindingObserver {
                       ),
                       const SizedBox(width: 12),
                       const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('NEXORA', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                        Text('QELVYRO', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
                         Text('Connect. Share. Belong.', style: TextStyle(fontSize: 9, color: muted)),
                       ]),
                     ]),
@@ -350,7 +350,7 @@ class _InboxPageState extends State<InboxPage> {
   }
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('NEXORA', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)), actions: [IconButton(onPressed: load, tooltip: 'Refresh chats', icon: const Icon(Icons.refresh))]),
+    appBar: AppBar(title: const Text('QELVYRO', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)), actions: [IconButton(onPressed: load, tooltip: 'Refresh chats', icon: const Icon(Icons.refresh))]),
     body: loading ? const Center(child: CircularProgressIndicator()) : error != null ? Center(child: Padding(padding: const EdgeInsets.all(20), child: Text('Could not load chats:\n' + error!))) : chats.isEmpty
       ? Center(child: Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisSize: MainAxisSize.min, children: const [
           Icon(Icons.forum_outlined, size: 58, color: accent), SizedBox(height: 14),
