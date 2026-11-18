@@ -135,6 +135,7 @@ class _AppState extends State<App> {
       useMaterial3: true,
     );
   }
+}
 
 class Gate extends StatelessWidget {
   const Gate({super.key});
