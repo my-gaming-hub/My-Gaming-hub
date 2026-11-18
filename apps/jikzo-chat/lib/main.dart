@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -21,44 +22,100 @@ Future<void> main() async {
   runApp(const App(configured: true));
 }
 
-class App extends StatelessWidget {
+
+class QTheme {
+  static final ValueNotifier<String> preset = ValueNotifier<String>('Neon Violet');
+  static final ValueNotifier<ThemeMode> mode = ValueNotifier<ThemeMode>(ThemeMode.dark);
+  static const Map<String, Color> accents = {
+    'Neon Violet': Color(0xFF8057FF),
+    'Ocean Blue': Color(0xFF168BFF),
+    'Emerald': Color(0xFF00A878),
+    'Rose Glow': Color(0xFFE84D91),
+    'Sunset Orange': Color(0xFFE87932),
+  };
+  static Color get accent => accents[preset.value] ?? accents['Neon Violet']!;
+  static Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('qelvyro_theme') ?? 'Neon Violet';
+    preset.value = accents.containsKey(saved) ? saved : 'Neon Violet';
+    final savedMode = prefs.getString('qelvyro_theme_mode') ?? 'dark';
+    mode.value = savedMode == 'light' ? ThemeMode.light : ThemeMode.dark;
+  }
+  static Future<void> choose(String name) async {
+    if (!accents.containsKey(name)) return;
+    preset.value = name;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('qelvyro_theme', name);
+  }
+  static Future<void> chooseMode(ThemeMode value) async {
+    mode.value = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('qelvyro_theme_mode', value == ThemeMode.light ? 'light' : 'dark');
+  }
+}
+
+class App extends StatefulWidget {
   final bool configured;
   const App({super.key, required this.configured});
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  State<App> createState() => _AppState();
+}
+class _AppState extends State<App> {
+  @override
+  void initState() {
+    super.initState();
+    QTheme.load().then((_) { if (mounted) setState(() {}); });
+  }
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<String>(
+    valueListenable: QTheme.preset,
+    builder: (context, selectedPreset, _) => ValueListenableBuilder<ThemeMode>(
+      valueListenable: QTheme.mode,
+      builder: (context, selectedMode, __) => MaterialApp(
     title: 'QELVYRO', debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: bg,
-      canvasColor: bg,
-      cardColor: panel,
-      dividerColor: const Color(0xFF26334B),
+    themeMode: selectedMode,
+    theme: _makeTheme(Brightness.light, QTheme.accent),
+    darkTheme: _makeTheme(Brightness.dark, QTheme.accent),
+    home: widget.configured ? const Gate() : const Scaffold(body: Center(child: Padding(padding: EdgeInsets.all(24), child: Text('QELVYRO\n\nBuild configuration is missing. Check GitHub Actions secrets.', textAlign: TextAlign.center)))),
+  )));
+  ThemeData _makeTheme(Brightness brightness, Color selectedAccent) {
+    final dark = brightness == Brightness.dark;
+    final background = dark ? bg : const Color(0xFFF5F7FC);
+    final surface = dark ? panel : Colors.white;
+    final raised = dark ? panelRaised : const Color(0xFFE9EEF8);
+    final foreground = dark ? Colors.white : const Color(0xFF172033);
+    return ThemeData(
+      brightness: brightness,
+      scaffoldBackgroundColor: background,
+      canvasColor: background,
+      cardColor: surface,
+      dividerColor: dark ? const Color(0xFF26334B) : const Color(0xFFDCE3EF),
       colorScheme: ColorScheme.fromSeed(
-        seedColor: accent,
-        primary: accent,
-        secondary: cyan,
-        surface: panel,
-        brightness: Brightness.dark,
+        seedColor: selectedAccent,
+        primary: selectedAccent,
+        secondary: dark ? cyan : selectedAccent,
+        surface: surface,
+        brightness: brightness,
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: bg,
+      appBarTheme: AppBarTheme(
+        backgroundColor: background,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: 0.2, color: Colors.white),
+        titleTextStyle: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: 0.2, color: foreground),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: panelRaised,
-        hintStyle: const TextStyle(color: muted),
+        fillColor: raised,
+        hintStyle: TextStyle(color: dark ? muted : const Color(0xFF667085)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFF26334B))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: cyan, width: 1.3)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: dark ? const Color(0xFF26334B) : const Color(0xFFDCE3EF))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: selectedAccent, width: 1.3)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: accent,
+          backgroundColor: selectedAccent,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -66,18 +123,18 @@ class App extends StatelessWidget {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: panel,
-        indicatorColor: accent.withValues(alpha: 0.24),
+        backgroundColor: surface,
+        indicatorColor: selectedAccent.withValues(alpha: 0.18),
         labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
-          color: states.contains(WidgetState.selected) ? Colors.white : muted,
+          color: states.contains(WidgetState.selected) ? foreground : (dark ? muted : const Color(0xFF667085)),
           fontWeight: states.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
         )),
       ),
+      listTileTheme: ListTileThemeData(iconColor: selectedAccent),
+      switchTheme: SwitchThemeData(thumbColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.selected) ? selectedAccent : null)),
       useMaterial3: true,
-    ),
-    home: configured ? const Gate() : const Scaffold(body: Center(child: Padding(padding: EdgeInsets.all(24), child: Text('QELVYRO\n\nBuild configuration is missing. Check GitHub Actions secrets.', textAlign: TextAlign.center)))),
-  );
-}
+    );
+  }
 
 class Gate extends StatelessWidget {
   const Gate({super.key});
@@ -1030,7 +1087,43 @@ class _SettingsPageState extends State<SettingsPage> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(error!, style: const TextStyle(color: Colors.orangeAccent)),
                   ),
-                if (isPrivacy) ...[
+                if (widget.section == 'Appearance') ...[
+                  const Text('CHOOSE YOUR THEME', style: TextStyle(color: muted, letterSpacing: 1.5)),
+                  const SizedBox(height: 8),
+                  Card(
+                    color: Theme.of(context).cardColor,
+                    child: Column(children: QTheme.accents.entries.map((entry) {
+                      final selected = QTheme.preset.value == entry.key;
+                      return ListTile(
+                        leading: Container(width: 34, height: 34, decoration: BoxDecoration(
+                          color: entry.value, borderRadius: BorderRadius.circular(12),
+                          boxShadow: [BoxShadow(color: entry.value.withValues(alpha: 0.3), blurRadius: 10)],
+                        )),
+                        title: Text(entry.key),
+                        subtitle: Text(entry.key == 'Neon Violet' ? 'Original QELVYRO look' : 'Personalise your QELVYRO colours'),
+                        trailing: selected ? Icon(Icons.check_circle, color: entry.value) : const Icon(Icons.circle_outlined),
+                        onTap: () async { await QTheme.choose(entry.key); if (mounted) setState(() {}); },
+                      );
+                    }).toList()),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text('DISPLAY MODE', style: TextStyle(color: muted, letterSpacing: 1.5)),
+                  const SizedBox(height: 8),
+                  Card(color: Theme.of(context).cardColor, child: Column(children: [
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.dark, groupValue: QTheme.mode.value,
+                      title: const Text('Dark mode'), subtitle: const Text('A darker interface'),
+                      onChanged: (v) async { if (v != null) await QTheme.chooseMode(v); if (mounted) setState(() {}); },
+                    ),
+                    RadioListTile<ThemeMode>(
+                      value: ThemeMode.light, groupValue: QTheme.mode.value,
+                      title: const Text('Light mode'), subtitle: const Text('A brighter interface'),
+                      onChanged: (v) async { if (v != null) await QTheme.chooseMode(v); if (mounted) setState(() {}); },
+                    ),
+                  ])),
+                  const SizedBox(height: 12),
+                  const Text('Your theme is saved on this device and will be restored next time you open QELVYRO.', style: TextStyle(color: muted, fontSize: 12)),
+                ] else if (isPrivacy) ...[
                   const Text('PROFILE VISIBILITY', style: TextStyle(color: muted, letterSpacing: 1.5)),
                   const SizedBox(height: 8),
                   Card(
