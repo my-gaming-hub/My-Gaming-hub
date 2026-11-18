@@ -379,6 +379,8 @@ class _PeoplePageState extends State<PeoplePage> {
   final search = TextEditingController();
   List<Map<String, dynamic>> people = [];
   final Map<String, Map<String, dynamic>> presence = {};
+  final Map<String, int> followerCounts = {};
+  final Set<String> following = {};
   bool busy = false;
   String? error;
   @override
@@ -402,15 +404,54 @@ class _PeoplePageState extends State<PeoplePage> {
         for (final item in statuses)
           item['user_id'].toString(): Map<String, dynamic>.from(item),
       };
+      final followRows = ids.isEmpty ? <dynamic>[] : await Supabase.instance.client
+          .from('nexora_follows').select('follower_id,following_id').inFilter('following_id', ids);
+      final myFollows = ids.isEmpty ? <dynamic>[] : await Supabase.instance.client
+          .from('nexora_follows').select('following_id').eq('follower_id', me).inFilter('following_id', ids);
+      final counts = <String, int>{for (final id in ids) id: 0};
+      for (final row in followRows) {
+        final id = row['following_id'].toString();
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+      final followingIds = myFollows.map<String>((row) => row['following_id'].toString()).toSet();
       if (mounted) setState(() {
         people = found;
-        presence
-          ..clear()
-          ..addAll(statusMap);
+        presence..clear()..addAll(statusMap);
+        followerCounts..clear()..addAll(counts);
+        following..clear()..addAll(followingIds);
       });
     } catch (e) { if (mounted) setState(() => error = e.toString()); }
     finally { if (mounted) setState(() => busy = false); }
   }
+  Future<void> toggleFollow(String userId) async {
+    final me = Supabase.instance.client.auth.currentUser!.id;
+    final wasFollowing = following.contains(userId);
+    setState(() {
+      if (wasFollowing) {
+        following.remove(userId);
+        followerCounts[userId] = ((followerCounts[userId] ?? 1) - 1).clamp(0, 1 << 30);
+      } else {
+        following.add(userId);
+        followerCounts[userId] = (followerCounts[userId] ?? 0) + 1;
+      }
+    });
+    try {
+      if (wasFollowing) {
+        await Supabase.instance.client.from('nexora_follows').delete()
+            .eq('follower_id', me).eq('following_id', userId);
+      } else {
+        await Supabase.instance.client.from('nexora_follows').insert({
+          'follower_id': me, 'following_id': userId,
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not update follow: $e')));
+        await load();
+      }
+    }
+  }
+
   Future<void> openChat(Map<String, dynamic> p) async {
     try {
       final id = await Supabase.instance.client.rpc('start_conversation', params: {'other_user': p['id']});
@@ -450,7 +491,14 @@ class _PeoplePageState extends State<PeoplePage> {
             Text('@' + p['username'].toString(), style: const TextStyle(color: muted)),
             Text(statusText, style: TextStyle(color: isOnline ? Colors.greenAccent : muted, fontSize: 11)),
           ]),
-          trailing: const Icon(Icons.chat_outlined, color: accent),
+          trailing: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text('${followerCounts[p['id'].toString()] ?? 0} followers', style: const TextStyle(fontSize: 10, color: muted)),
+            SizedBox(height: 30, child: OutlinedButton(
+              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10), visualDensity: VisualDensity.compact),
+              onPressed: () => toggleFollow(p['id'].toString()),
+              child: Text(following.contains(p['id'].toString()) ? 'Following' : 'Follow', style: const TextStyle(fontSize: 11)),
+            )),
+          ]),
           onTap: () => openChat(p),
         );
       }))),
